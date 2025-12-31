@@ -32,8 +32,11 @@ def main():
 
     files_to_process = []
 
-    if args.files:
-        files_to_process = [Path(f) for f in args.files]
+    if not args.files:
+        logger.warning("No files provided to process, Use --help for more information.")
+        sys.exit(0)
+
+    files_to_process = [Path(f) for f in args.files]
 
     has_error = False
 
