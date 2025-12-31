@@ -1,0 +1,12 @@
+[project]
+name = ""
+version = "0.1.0"
+description = ""
+readme = "README.md"
+dependencies = [
+    "dnspython",
+    "packaging",
+    "pefile",
+    "pywin32-ctypes",
+    "setuptools"
+]
