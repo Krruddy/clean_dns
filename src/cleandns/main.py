@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from src.cleandns.argument_parser import ArgumentParser
-from src.cleandns.records import DNSFile
+from src.cleandns.dns_file import DNSFile
 from src.cleandns.logger import Logger
 
 def process_file(file_path: Path, logger: Logger) -> bool:
@@ -33,7 +33,7 @@ def main():
     files_to_process = []
 
     if not args.files:
-        logger.warning("No files provided to process, Use --help for more information.")
+        logger.warning("No files provided to process. Use --help for more information.")
         sys.exit(0)
 
     files_to_process = [Path(f) for f in args.files]

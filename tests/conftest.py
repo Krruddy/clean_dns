@@ -3,6 +3,8 @@ import pytest
 from pathlib import Path
 from cleandns.record_types import ARecord, RecordType, DNSClass, SOARecord
 
+ZONE_FILE_ENCODING = "utf-8"
+
 @pytest.fixture
 def sample_ttl_line():
     return "$TTL 3600"
@@ -56,6 +58,11 @@ k8s-master-01  IN    A    10.8.8.8
 k8s-worker-01  IN    A    10.8.8.20"""
 
 @pytest.fixture
+def simple_sample_cname_records_block():
+    return """ftp    IN  CNAME   www
+"""
+
+@pytest.fixture
 def simple_sample_ptr_records_block():
     return """10  IN  PTR www.example.com.
 20  IN  PTR mail.example.com."""
@@ -90,8 +97,8 @@ def complex_sample_ptr_records_block():
 20.8.8         IN    PTR    k8s-worker-01.krruddy.com."""
 
 @pytest.fixture
-def forward_sample_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block):
-    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n"
+def forward_sample_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, simple_sample_cname_records_block):
+    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n{simple_sample_cname_records_block}\n"
 
 @pytest.fixture
 def reverse_sample_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_ptr_records_block):
@@ -100,6 +107,21 @@ def reverse_sample_zone_content(sample_ttl_line, sample_soa_block, sample_ns_blo
 @pytest.fixture
 def complex_reverse_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, complex_sample_ptr_records_block):
     return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_sample_ptr_records_block}\n"
+
+@pytest.fixture
+def complex_forward_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, complex_sample_a_records_block):
+    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_sample_a_records_block}\n"
+
+@pytest.fixture
+def expected_sorted_a_names():
+    """Returns the expected order of names from the complex A block after alphabetical sorting."""
+    return [
+        "auth-ldap-01", "backup-svr-01", "cicd-runner-01", "db-primary-01",
+        "db-replica-01", "db-replica-02", "imap-store-01", "jump-host-01",
+        "k8s-master-01", "k8s-worker-01", "monitor-01", "pop-gw-01", "redis-cache-01",
+        "redis-cache-02", "smtp-relay-01", "web-prod-01", "web-prod-02", "web-prod-03",
+        "web-prod-04", "web-prod-05"
+    ]
 
 @pytest.fixture
 def expected_sorted_ptr_names():
