@@ -35,10 +35,13 @@ class AbstractRecord(ABC):
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, AbstractRecord):
             return NotImplemented
-        
-        if self.name != other.name:
-            return self.name < other.name
-        return str(self.rdata) < str(other.rdata)
+
+        self_name_lower = self.name.lower()
+        other_name_lower = other.name.lower()
+
+        if self_name_lower != other_name_lower:
+            return self_name_lower < other_name_lower
+        return str(self.rdata).lower() < str(other.rdata).lower()
 @dataclass
 class SOARecord(AbstractRecord):
     mname: str 
@@ -117,7 +120,7 @@ class PTRRecord(AbstractRecord):
             # Split into labels and convert to (type_priority, value)
             # 0 for int (priority), 1 for string. This ensures 2 < 10 and 10 < "foo"
             return [
-                (0, int(part)) if part.isdigit() else (1, part)
+                (0, int(part)) if part.isdigit() else (1, part.lower())
                 for part in name.split('.')
             ]
         
@@ -127,4 +130,4 @@ class PTRRecord(AbstractRecord):
         if self_key != other_key:
             return self_key < other_key
         
-        return str(self.rdata) < str(other.rdata)
+        return str(self.rdata).lower() < str(other.rdata).lower()
