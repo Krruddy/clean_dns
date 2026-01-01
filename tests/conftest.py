@@ -3,6 +3,8 @@ import pytest
 from pathlib import Path
 from cleandns.record_types import ARecord, RecordType, DNSClass, SOARecord
 
+ZONE_FILE_ENCODING = "utf-8"
+
 @pytest.fixture
 def sample_ttl_line():
     return "$TTL 3600"

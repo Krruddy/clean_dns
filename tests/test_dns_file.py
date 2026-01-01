@@ -3,8 +3,7 @@ from pathlib import Path
 from cleandns.dns_file import DNSFile
 from cleandns.exceptions import MissingSOArecord
 from cleandns.record_types import RecordType
-
-#TODO Set the encoding using a variable
+from tests.conftest import ZONE_FILE_ENCODING
 
 # --- Fixtures for Sample Data ---
 
@@ -13,7 +12,7 @@ def zone_file(tmp_path, forward_sample_zone_content):
     """Creates a temporary valid zone file."""
     p = tmp_path / "example.com.zone"
     # We extend the shared fixture with the CNAME record specific to these tests
-    p.write_text(forward_sample_zone_content, encoding="utf-8")
+    p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
     return p
 
 # --- Parsing Tests ---
@@ -41,7 +40,7 @@ def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_ns_block
         f"{simple_sample_a_records_block}\n"
     )
     p = tmp_path / "no_soa.zone"
-    p.write_text(content, encoding="utf-8")
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
     
     with pytest.raises(MissingSOArecord):
         DNSFile(p)
@@ -53,7 +52,7 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block):
         f"{sample_soa_block}\n"
     )
     p = tmp_path / "bad_ttl.zone"
-    p.write_text(content, encoding="utf-8")
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
     
     with pytest.raises(ValueError, match="Invalid TTL"):
         DNSFile(p)
@@ -76,7 +75,7 @@ def test_remove_duplicates(tmp_path, sample_ttl_line, sample_soa_block, sample_n
         f"{simple_sample_a_records_block}\n"
     )
     p = tmp_path / "dup.zone"
-    p.write_text(content, encoding="utf-8")
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
     
     dns = DNSFile(p)
 
@@ -94,7 +93,7 @@ def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_
     """Test that A records are sorted alphabetically."""
     content = complex_forward_zone_content
     p = tmp_path / "unsorted.zone"
-    p.write_text(content, encoding="utf-8")
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
     
     dns = DNSFile(p)
     dns.sort()
@@ -107,7 +106,7 @@ def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorte
     """Test that PTR records are sorted numerically."""
     content = complex_reverse_zone_content
     p = tmp_path / "unsorted.zone"
-    p.write_text(content, encoding="utf-8")
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
     dns = DNSFile(p)
     dns.sort()
@@ -128,7 +127,7 @@ def test_save_creates_backup_and_updates_file(zone_file):
     dns.save()
     
     # 1. Verify content was updated (serial incremented)
-    new_content = zone_file.read_text()
+    new_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
     assert str(original_serial + 1) in new_content
     
     # 2. Verify backup file was created
