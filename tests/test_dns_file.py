@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from cleandns.dns_file import DNSFile
 from cleandns.exceptions import MissingSOArecord
 from cleandns.record_types import RecordType

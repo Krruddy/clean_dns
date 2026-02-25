@@ -1,7 +1,4 @@
-from dns.tokenizer import COMMENT
 import pytest
-from pathlib import Path
-from cleandns.record_types import ARecord, RecordType, DNSClass, SOARecord
 
 ZONE_FILE_ENCODING = "utf-8"
 
@@ -132,38 +129,3 @@ def expected_sorted_ptr_names():
         "30.50.120", "50.5.0", "51.5.0", "52.5.0", "70.60.45", "99.0.15", 
         "99.99.99", "254.0.0"
     ]
-
-#@pytest.fixture
-#def sample_soa_record():
-#    """
-#    Returns a standard SOA record for testing.
-#    """
-#    return SOARecord(
-#        name="example.com.",
-#        ttl=3600,
-#        type=RecordType.SOA,
-#        class_=DNSClass.IN,
-#        rdata="ns1.example.com. admin.example.com. 2023101001 3600 1800 604800 86400",
-#        mname="ns1.example.com.",
-#        rname="admin.example.com.",
-#        serial=2023101001,
-#        refresh=3600,
-#        retry=1800,
-#        expire=604800,
-#        minimum=86400,
-#        comment="Sample SOA record"
-#    )
-#
-#@pytest.fixture
-#def sample_a_record():
-#    """
-#    Returns a standard A record for testing.
-#    """
-#    return ARecord(
-#        name="www.example.com",
-#        ttl=3600,
-#        type=RecordType.A,
-#        class_=DNSClass.IN,
-#        rdata="1.2.3.4",
-#        comment="Sample A record"
-#    )
