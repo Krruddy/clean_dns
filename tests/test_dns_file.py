@@ -21,12 +21,12 @@ def test_load_valid_zone(zone_file):
     """Test that a valid zone file is parsed correctly."""
     assert zone_file.exists()
     dns = DNSFile(zone_file)
-    
+
     assert dns.ttl == 3600
     assert dns.soa_record is not None
     assert dns.soa_record.serial == 2023101001
     assert dns.soa_record.mname == "ns1.example.com."
-    
+
     # Check record counts
     assert len(dns.records[RecordType.A]) == 2
     assert len(dns.records[RecordType.NS]) == 2
@@ -41,7 +41,7 @@ def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_ns_block
     )
     p = tmp_path / "no_soa.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
-    
+
     with pytest.raises(MissingSOArecord):
         DNSFile(p)
 
@@ -49,7 +49,7 @@ def test_empty_file_raises_exception(tmp_path):
     """Test that a completely empty file raises MissingSOArecord."""
     p = tmp_path / "empty.zone"
     p.write_text("", encoding=ZONE_FILE_ENCODING)
-    
+
     with pytest.raises(MissingSOArecord):
         DNSFile(p)
 
@@ -61,7 +61,7 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block):
     )
     p = tmp_path / "bad_ttl.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
-    
+
     with pytest.raises(ValueError, match="Invalid TTL"):
         DNSFile(p)
 
@@ -84,7 +84,7 @@ def test_remove_duplicates(tmp_path, sample_ttl_line, sample_soa_block, sample_n
     )
     p = tmp_path / "dup.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
-    
+
     dns = DNSFile(p)
 
     # Manually add a duplicate record
@@ -102,10 +102,10 @@ def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_
     content = complex_forward_zone_content
     p = tmp_path / "unsorted.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
-    
+
     dns = DNSFile(p)
     dns.sort()
-    
+
     records = dns.records[RecordType.A]
     # Normalize names by stripping trailing dots for a robust comparison
     assert [record.name.rstrip('.') for record in records] == [n.rstrip('.') for n in expected_sorted_a_names]
@@ -136,10 +136,10 @@ def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_ns_block, sa
     )
     p = tmp_path / "case.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
-    
+
     dns = DNSFile(p)
     dns.sort()
-    
+
     names = [r.name.lower() for r in dns.records[RecordType.A]]
     assert names == ["aaa", "bbb", "zzz"]
 
@@ -150,15 +150,15 @@ def test_save_creates_backup_and_updates_file(zone_file):
     original_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
     dns = DNSFile(zone_file)
     original_serial = dns.soa_record.serial
-    
+
     # Mark as modified to trigger serial update and file write
     dns.modified = True
     dns.save()
-    
+
     # 1. Verify content was updated (serial incremented)
     new_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
     assert str(original_serial + 1) in new_content
-    
+
     # 2. Verify backup file was created
     # Backup format is filename.YYYY-MM-DD_HH-MM-SS
     # We look for any file starting with the original name but longer
