@@ -127,47 +127,55 @@ class DNSFile:
 
 
     @property
-    def tmp_path(self) -> Path:
+    def __tmp_path(self) -> Path:
         return self.path.with_name(f"{self.path.name}.tmp")
 
     def reconstruct_file(self):
+        """
+        Reconstructs the DNS file with the current records and writes it to a temporary file.
+        """
         # Open the file
         new_file = self.__create_tmp_file()
 
         # Add the default TTL
         if self.ttl is not None:
-            new_file.write(f"$TTL\t{self.ttl}\n")
+            _ = new_file.write(f"$TTL\t{self.ttl}\n")
 
         # Add the SOA record
         if self.soa_record:
-            new_file.write(f"{self.soa_record}\n")
+            _ = new_file.write(f"{self.soa_record}\n")
 
         # Add the NS records
         if RecordType.NS in self.records:
             for record in self.records[RecordType.NS]:
-                new_file.write(f"{record}\n")
+                _ = new_file.write(f"{record}\n")
 
         # Add the rest of the records
         for r_type, records in self.records.items():
             if r_type != RecordType.NS:
                 for record in records:
-                    new_file.write(f"{record}\n")
+                    _ = new_file.write(f"{record}\n")
 
         # Close the file
         new_file.close()
 
     def __create_tmp_file(self):
+        """
+        Creates a temporary file for writing the new DNS zone data.
+        If the file already exists, it will be overwritten.
+        """
         # Create tmp file in the same directory as the original to ensure atomic move later
         try:
-            self.logger.info(f"Creating the file {self.tmp_path.name} ...")
-            return open(self.tmp_path, "x")
+            self.logger.info(f"Creating the file {self.__tmp_path.name} ...")
+            return open(self.__tmp_path, "x")
         except FileExistsError:
-            self.logger.warning(f"The file {self.tmp_path.name} already exists and is going to be overwritten.")
-            return open(self.tmp_path, "w")
+            self.logger.warning(f"The file {self.__tmp_path.name} already exists and is going to be overwritten.")
+            return open(self.__tmp_path, "w")
 
     def replace_file(self):
         """
-        Takes the name of the file and replaces the old file with the new one
+        Replaces the original DNS file with the newly reconstructed temporary file,
+        while creating a backup of the original file with a timestamped name.
         """
 
         current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -175,14 +183,18 @@ class DNSFile:
 
         if self.path.exists():
             # Create a backup copy (preserves metadata and keeps original safe until the very end)
-            shutil.copy2(self.path, backup_path)
+            _ = shutil.copy2(self.path, backup_path)
             # Apply original file permissions to the new temp file
-            shutil.copymode(self.path, self.tmp_path)
+            shutil.copymode(self.path, self.__tmp_path)
 
         # Atomic replacement: Overwrites self.path with tmp_path in one operation
-        os.replace(self.tmp_path, self.path)
+        os.replace(self.__tmp_path, self.path)
 
     def save(self):
+        """
+        Saves the changes to the DNS file by reconstructing it and replacing the original file.
+        The original file is backed up with a timestamped name before replacement.
+        """
         if self.modified:
             self.increment_serial()
         self.reconstruct_file()
