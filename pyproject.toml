@@ -1,5 +1,5 @@
 [project]
-name = ""
+name = "clean_dns"
 version = "0.1.0"
 description = ""
 readme = "README.md"
@@ -8,5 +8,6 @@ dependencies = [
     "packaging",
     "pefile",
     "pywin32-ctypes",
-    "setuptools"
+    "setuptools",
+    "pytest"
 ]
