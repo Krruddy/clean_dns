@@ -40,7 +40,7 @@ class DNSFile:
                 line_clean = line.split(';')[0].strip()
                 if line_clean.upper().startswith("$TTL"):
                     parts = line_clean.split()
-                    if len(parts) >= 2:
+                    if len(parts) == 2:
                         try:
                             self.ttl = dns.ttl.from_text(parts[1])
                         except (ValueError, dns.ttl.BadTTL):
@@ -53,6 +53,7 @@ class DNSFile:
 
         with open(self.path, "r") as file:
             file_content = file.read()
+
         zone = dns.zone.from_text(file_content, origin="", relativize=False, check_origin=False)
 
         # Mapping for standard records that share the same constructor signature
@@ -100,12 +101,20 @@ class DNSFile:
             raise MissingSOArecord(f"Missing SOA record in {self.path.name}")
 
     def increment_serial(self):
-        self.soa_record.increment_serial()
+        """
+        Increments the serial number in the SOA record by 1.
+        """
+        if self.soa_record is not None:
+            self.soa_record.increment_serial()
 
     def remove_duplicates(self):
+        """
+        Removes duplicate records from the DNS file. 
+        A record is considered a duplicate if its string representation is identical to another record of the same type.
+        """
         for r_type in self.records:
-            unique_records = []
-            seen = set()
+            unique_records: list[AbstractRecord] = []
+            seen = set[str]()
             for record in self.records[r_type]:
                 # Use the string representation as a key since records are not hashable
                 record_key = str(record)
@@ -118,6 +127,10 @@ class DNSFile:
                 self.modified = True
 
     def sort(self):
+        """
+        Sorts the records in the DNS file.
+        The sorting is done first by the name of the record (case-insensitive).
+        """
         for records in self.records.values():
             new_order = sorted(records)
             if new_order != records:
