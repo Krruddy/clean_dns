@@ -1,4 +1,6 @@
 import logging
+from typing import override
+
 
 class LoggerMeta(type):
     """

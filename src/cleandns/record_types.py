@@ -22,10 +22,11 @@ class AbstractRecord(ABC):
     name: str
     ttl: int
     type: RecordType
-    rdata: Union[str, Any]
-    comment: Optional[str] = field(compare=False)
+    rdata: str
+    comment: str | None = field(compare=False)
     class_: DNSClass
 
+    @override
     def __str__(self) -> str:
         """
         Returns the record in the standard DNS zone file format (BIND format).
@@ -112,6 +113,11 @@ class CNAMERecord(AbstractRecord):
 
 @dataclass
 class PTRRecord(AbstractRecord):
+    """
+    Represents a Pointer (PTR) DNS record, which maps an IP address to a hostname.
+    """
+
+    @override
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, PTRRecord):
             return super().__lt__(other)
