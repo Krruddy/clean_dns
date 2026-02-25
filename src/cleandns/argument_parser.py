@@ -4,7 +4,7 @@ import argparse
 class ArgumentParser:
     def __init__(self):
         self.parser = argparse.ArgumentParser(description="A tool to process and manage DNS files cleanly.")
-        self.parser.add_argument(
+        _ = self.parser.add_argument(
             "-f", "--files",
             nargs='+',
             type=str,
