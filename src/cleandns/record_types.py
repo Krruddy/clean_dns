@@ -43,16 +43,21 @@ class AbstractRecord(ABC):
         if self_name_lower != other_name_lower:
             return self_name_lower < other_name_lower
         return str(self.rdata).lower() < str(other.rdata).lower()
+
 @dataclass
 class SOARecord(AbstractRecord):
+    """
+    Represents a Start of Authority (SOA) DNS record, which contains administrative information about the zone.
+    """
     mname: str 
     rname: str 
     serial: int
-    refresh: int
-    retry: int 
-    expire: int
-    minimum: int 
+    refresh: int | dict[int, str]
+    retry: int | dict[int, str]
+    expire: int | dict[int, str]
+    minimum: int | dict[int, str]
 
+    @override
     def __str__(self) -> str:
         return (
             f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname} {self.rname} (\n"
@@ -69,9 +74,10 @@ class SOARecord(AbstractRecord):
         """
         self.serial += 1
 
-    def _format_soa_time(self, seconds):
+    @NotImplementedError
+    def _format_soa_time(self, seconds: int) -> dict[int, str]:
         """
-        
+        Converts a time value in seconds to a human-readable format using weeks, days, hours, minutes, and seconds.
         """
         # Define time units and their corresponding values in seconds
         time_units = [
@@ -90,10 +96,7 @@ class SOARecord(AbstractRecord):
             if seconds >= unit_value:
                 result[unit_name], seconds = divmod(seconds, unit_value)
 
-        # Create a formatted string
-        formatted_time = ", ".join(f"{value}{unit}" for unit, value in result.items())
-
-        return formatted_time
+        return result
 
 @dataclass
 class NSRecord(AbstractRecord):
