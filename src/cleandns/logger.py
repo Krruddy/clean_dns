@@ -23,7 +23,7 @@ class LoggerMeta(type):
 class Logger(metaclass=LoggerMeta):
     def __init__(self):
         # Create a logger
-        self.logger = logging.getLogger("my_logger")
+        self.logger: logging.Logger = logging.getLogger("my_logger")
 
         # Create a StreamHandler and set the custom formatter
         handler = logging.StreamHandler()
@@ -46,13 +46,14 @@ class Logger(metaclass=LoggerMeta):
 
 
 class CustomFormatter(logging.Formatter):
-    FORMATS = {
+    FORMATS: dict[int, str] = {
         logging.INFO: "[+] %(message)s",
         logging.WARNING: "[!] %(message)s",
         logging.ERROR: "[-] %(message)s",
     }
 
-    def format(self, record):
+    @override
+    def format(self, record: logging.LogRecord) -> str:
         log_format = self.FORMATS.get(record.levelno, self._style._fmt)
         self._style._fmt = log_format
         return super().format(record)

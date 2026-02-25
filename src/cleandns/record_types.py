@@ -1,7 +1,7 @@
-from abc import abstractmethod, ABC
+from abc import ABC
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Union, Any
+from typing import override
 
 
 class RecordType(Enum):

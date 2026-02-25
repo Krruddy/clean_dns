@@ -1,6 +1,5 @@
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, List, Optional
 
 from cleandns.exceptions import MissingSOArecord
 from cleandns.logger import Logger
@@ -11,7 +10,8 @@ import dns.rdataclass
 import dns.ttl
 import dns.rdatatype
 
-from cleandns.record_types import ARecord, NSRecord, CNAMERecord, SOARecord, PTRRecord, RecordType, DNSClass
+from cleandns.record_types import ARecord, NSRecord, CNAMERecord, SOARecord, PTRRecord, RecordType, DNSClass, \
+    AbstractRecord
 
 from pathlib import Path
 
@@ -21,12 +21,11 @@ class DNSFile:
     """
     path: Path
     logger: Logger
-    ttl: Optional[int]
-    soa_record: Optional[SOARecord]
-    records: Dict[RecordType, List]
+    ttl: int | None
+    soa_record: SOARecord | None
+    records: dict[RecordType, list[AbstractRecord]]
     modified: bool
 
-    # The constructor takes the name of the file and sets the type of file, the file content, the space before the incrementation value, the incrementation value and the list of DNS entries.
     def __init__(self, path: Path):
         self.logger = Logger()
         self.path = path
