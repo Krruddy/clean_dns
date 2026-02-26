@@ -26,14 +26,20 @@ class DNSFile:
     omit_origin: bool
     soa_record: SOARecord | None
     records: dict[RecordType, list[AbstractRecord]]
+    human_readable: bool
     modified: bool
+    omit_ttl: bool
+    omit_record_ttl: bool
 
-    def __init__(self, path: Path, omit_origin: bool = True) -> None:
+    def __init__(self, path: Path, omit_origin: bool = True, human_readable: bool = False, omit_ttl: bool = False, omit_record_ttl: bool = False) -> None:
         self.logger = Logger()
         self.path = path
         self.__set_TTL()
         self.origin = None
         self.omit_origin = omit_origin
+        self.omit_ttl = omit_ttl
+        self.omit_record_ttl = omit_record_ttl
+        self.human_readable = human_readable
         self.__set_DNS_records()
         self.modified = False
 
@@ -58,12 +64,9 @@ class DNSFile:
         with open(self.path, "r") as file:
             file_content = file.read()
 
-        zone = dns.zone.from_text(file_content, check_origin=False)
+        zone = dns.zone.from_text(file_content)
 
-        if zone.origin is not None:
-            self.origin = zone.origin.to_text()
-        else:
-            raise ValueError(f"Missing $ORIGIN directive in {self.path.name}. This is required for proper parsing of the zone file.")
+        self.origin = zone.origin.to_text()
 
         # Mapping for standard records that share the same constructor signature
         record_types = {
@@ -81,11 +84,12 @@ class DNSFile:
                     if rdtype in record_types:
                         record_cls, enum_type = record_types[rdtype]
                         current_record = record_cls(
-                            name=name.to_text(omit_final_dot=True),
+                            name=name.to_text(),
                             ttl=rdataset.ttl,
                             class_=DNSClass(dns.rdataclass.to_text(rdataset.rdclass)),
                             type=enum_type,
                             rdata=rdata.to_text(),
+                            omit_ttl=self.omit_record_ttl,
                             comment=None
                         )
                         self.records[enum_type].append(current_record)
@@ -103,7 +107,10 @@ class DNSFile:
                                                    refresh=rdata.refresh,
                                                    retry=rdata.retry,
                                                    expire=rdata.expire,
-                                                   minimum=rdata.minimum)
+                                                   minimum=rdata.minimum,
+                                                   omit_ttl=self.omit_record_ttl,
+                                                   human_readable=self.human_readable)
+
                         self.soa_record = current_record
 
         if self.soa_record is None:
@@ -160,7 +167,7 @@ class DNSFile:
         new_file = self.__create_tmp_file()
 
         # Add the default TTL
-        if self.ttl is not None:
+        if self.ttl is not None and not self.omit_ttl:
             _ = new_file.write(f"$TTL\t{self.ttl}\n")
 
         # Add the $ORIGIN directive
