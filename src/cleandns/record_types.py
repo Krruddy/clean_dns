@@ -61,11 +61,12 @@ class SOARecord(AbstractRecord):
     def __str__(self) -> str:
         return (
             f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname} {self.rname} (\n"
-            f"\t\t\t\t{self.serial}\t; serial\n"
-            f"\t\t\t\t{self.refresh}\t; refresh\n"
-            f"\t\t\t\t{self.retry}\t; retry\n"
-            f"\t\t\t\t{self.expire}\t; expire\n"
-            f"\t\t\t\t{self.minimum})\t; minimum"
+            f"\t{self.serial}\t; serial\n"
+            f"\t{self.refresh}\t; refresh\n"
+            f"\t{self.retry}\t; retry\n"
+            f"\t{self.expire}\t; expire\n"
+            f"\t{self.minimum}\t; minimum\n"
+            f")"
         )
     
     def increment_serial(self):
