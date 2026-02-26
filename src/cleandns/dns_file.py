@@ -22,14 +22,18 @@ class DNSFile:
     path: Path
     logger: Logger
     ttl: int | None
+    origin: str | None
+    omit_origin: bool
     soa_record: SOARecord | None
     records: dict[RecordType, list[AbstractRecord]]
     modified: bool
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, omit_origin: bool = True) -> None:
         self.logger = Logger()
         self.path = path
         self.__set_TTL()
+        self.origin = None
+        self.omit_origin = omit_origin
         self.__set_DNS_records()
         self.modified = False
 
@@ -54,7 +58,12 @@ class DNSFile:
         with open(self.path, "r") as file:
             file_content = file.read()
 
-        zone = dns.zone.from_text(file_content, origin="", relativize=False, check_origin=False)
+        zone = dns.zone.from_text(file_content, check_origin=False)
+
+        if zone.origin is not None:
+            self.origin = zone.origin.to_text()
+        else:
+            raise ValueError(f"Missing $ORIGIN directive in {self.path.name}. This is required for proper parsing of the zone file.")
 
         # Mapping for standard records that share the same constructor signature
         record_types = {
