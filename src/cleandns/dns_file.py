@@ -163,14 +163,27 @@ class DNSFile:
         if self.ttl is not None:
             _ = new_file.write(f"$TTL\t{self.ttl}\n")
 
+        # Add the $ORIGIN directive
+        if self.origin is not None and not self.omit_origin:
+            _ = new_file.write(f"$ORIGIN\t{self.origin}\n")
+
+        # Add a blank line for readability
+        _ = new_file.write("\n")
+
         # Add the SOA record
         if self.soa_record:
             _ = new_file.write(f"{self.soa_record}\n")
+
+        # Add a blank line for readability
+        _ = new_file.write("\n")
 
         # Add the NS records
         if RecordType.NS in self.records:
             for record in self.records[RecordType.NS]:
                 _ = new_file.write(f"{record}\n")
+
+        # Add a blank line for readability
+        _ = new_file.write("\n")
 
         # Add the rest of the records
         for r_type, records in self.records.items():
