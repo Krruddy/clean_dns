@@ -25,13 +25,17 @@ class AbstractRecord(ABC):
     rdata: str
     comment: str | None = field(compare=False)
     class_: DNSClass
+    omit_ttl: bool = field(compare=False)
 
     @override
     def __str__(self) -> str:
         """
         Returns the record in the standard DNS zone file format (BIND format).
         """
+        if self.omit_ttl:
+            return f"{self.name}\t{self.class_.value}\t{self.type.value}\t{self.rdata}"
         return f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.rdata}"
+
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, AbstractRecord):
@@ -52,15 +56,22 @@ class SOARecord(AbstractRecord):
     mname: str 
     rname: str 
     serial: int
-    refresh: int | dict[int, str]
-    retry: int | dict[int, str]
-    expire: int | dict[int, str]
-    minimum: int | dict[int, str]
+    refresh: int | str
+    retry: int | str
+    expire: int | str
+    minimum: int | str
+    human_readable: bool = field(default=False, compare=False)
 
     @override
     def __str__(self) -> str:
+        if self.human_readable:
+            self.refresh = self._format_time(self.refresh) if isinstance(self.refresh, int) else self.refresh
+            self.retry = self._format_time(self.retry) if isinstance(self.retry, int) else self.retry
+            self.expire = self._format_time(self.expire) if isinstance(self.expire, int) else self.expire
+            self.minimum = self._format_time(self.minimum) if isinstance(self.minimum, int) else self.minimum
+
         return (
-            f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname} {self.rname} (\n"
+            f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname}\t{self.rname} (\n"
             f"\t{self.serial}\t; serial\n"
             f"\t{self.refresh}\t; refresh\n"
             f"\t{self.retry}\t; retry\n"
@@ -75,8 +86,7 @@ class SOARecord(AbstractRecord):
         """
         self.serial += 1
 
-    @NotImplementedError
-    def _format_soa_time(self, seconds: int) -> dict[int, str]:
+    def _format_time(self, seconds: int) -> str:
         """
         Converts a time value in seconds to a human-readable format using weeks, days, hours, minutes, and seconds.
         """
@@ -89,13 +99,17 @@ class SOARecord(AbstractRecord):
             ('s', 1)             # 1 second
         ]
 
-        # Create a dictionary to store the breakdown
-        result = {}
+        result = ""
 
         # Calculate the time in each unit
         for unit_name, unit_value in time_units:
             if seconds >= unit_value:
-                result[unit_name], seconds = divmod(seconds, unit_value)
+                # Calculate how many whole units fit into the remaining seconds
+                unit_amount = seconds // unit_value
+                # Subtract the calculated amount of time from the total seconds
+                seconds -= unit_amount * unit_value
+                # Append the amount and unit to the result string
+                result += f"{unit_amount}{unit_name}"
 
         return result
 
@@ -127,11 +141,13 @@ class PTRRecord(AbstractRecord):
             return super().__lt__(other)
         
         def sort_key(name: str):
-            # Split into labels and convert to (type_priority, value)
-            # 0 for int (priority), 1 for string. This ensures 2 < 10 and 10 < "foo"
+            parts = name.split('.')
+            
+            parts.reverse() 
+            
             return [
                 (0, int(part)) if part.isdigit() else (1, part.lower())
-                for part in name.split('.')
+                for part in parts
             ]
         
         self_key = sort_key(self.name)
