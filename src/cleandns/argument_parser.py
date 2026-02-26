@@ -11,7 +11,13 @@ class ArgumentParser:
             "-f", "--files",
             nargs='+',
             type=str,
-            help="the DNS files that will be treated by the program"
+            help="the DNS files that will be treated by the program."
+        )
+        _ = self.parser.add_argument(
+            "--omit-origin",
+            action="store_true",
+            default=False,
+            help="Do not output the $ORIGIN line in the reconstructed file."
         )
 
     def parse_arguments(self, args: Sequence[str] | None = None) -> argparse.Namespace:

@@ -4,7 +4,7 @@ from src.cleandns.argument_parser import ArgumentParser
 from src.cleandns.dns_file import DNSFile
 from src.cleandns.logger import Logger
 
-def process_file(file_path: Path, logger: Logger) -> bool:
+def process_file(file_path: Path, logger: Logger, omit_origin: bool) -> bool:
     """
     Process a single DNS file. Returns True if successful, False otherwise.
     """
@@ -13,7 +13,7 @@ def process_file(file_path: Path, logger: Logger) -> bool:
         return False
 
     try:
-        dns_file = DNSFile(file_path)
+        dns_file = DNSFile(file_path, omit_origin=omit_origin)
         dns_file.remove_duplicates()
         dns_file.sort()
         dns_file.save()
@@ -42,7 +42,7 @@ def main():
 
     # Process files sequentially
     for file_path in files_to_process:
-        success = process_file(file_path, logger)
+        success = process_file(file_path, logger, omit_origin=args.omit_origin)
         if not success:
             has_error = True
 
