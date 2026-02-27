@@ -1,10 +1,21 @@
 import sys
 from pathlib import Path
-from src.cleandns.argument_parser import ArgumentParser
-from src.cleandns.dns_file import DNSFile
-from src.cleandns.logger import Logger
 
-def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> bool:
+# Get the directory where main.py is located
+current_dir = Path(__file__).resolve().parent
+# Add the 'libs' subdirectory to the Python path
+sys.path.insert(0, str(current_dir / "libs"))
+# --------------------------------------
+
+import sys
+from pathlib import Path
+from typing import Dict
+
+from argument_parser import ArgumentParser
+from dns_file import DNSFile
+from logger import Logger
+
+def process_file(file_path: Path, logger: Logger, config: Dict[str, bool]) -> bool:
     """
     Process a single DNS file. Returns True if successful, False otherwise.
     """

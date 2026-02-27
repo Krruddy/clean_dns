@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: clean_dns
+Version: 0.1.0
+Description-Content-Type: text/markdown
+Requires-Dist: dnspython
+Requires-Dist: packaging
+Requires-Dist: pefile
+Requires-Dist: pywin32-ctypes
+Requires-Dist: setuptools
+Requires-Dist: pytest
+Requires-Dist: pyinstaller
+
