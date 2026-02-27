@@ -7,6 +7,10 @@ def sample_ttl_line():
     return "$TTL 3600"
 
 @pytest.fixture
+def sample_origin_line():
+    return "$ORIGIN example.com."
+
+@pytest.fixture
 def sample_soa_block():
     return """@   IN  SOA ns1.example.com. admin.example.com. (
             2023101001 ; serial
@@ -94,20 +98,20 @@ def complex_sample_ptr_records_block():
 20.8.8         IN    PTR    k8s-worker-01.krruddy.com."""
 
 @pytest.fixture
-def forward_sample_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, simple_sample_cname_records_block):
-    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n{simple_sample_cname_records_block}\n"
+def forward_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, simple_sample_cname_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n{simple_sample_cname_records_block}\n"
 
 @pytest.fixture
-def reverse_sample_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_ptr_records_block):
-    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_ptr_records_block}\n"
+def reverse_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_ptr_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_ptr_records_block}\n"
 
 @pytest.fixture
-def complex_reverse_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, complex_sample_ptr_records_block):
-    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_sample_ptr_records_block}\n"
+def complex_reverse_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, complex_sample_ptr_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_sample_ptr_records_block}\n"
 
 @pytest.fixture
-def complex_forward_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, complex_sample_a_records_block):
-    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_sample_a_records_block}\n"
+def complex_forward_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, complex_sample_a_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_sample_a_records_block}\n"
 
 @pytest.fixture
 def expected_sorted_a_names():
@@ -124,8 +128,24 @@ def expected_sorted_a_names():
 def expected_sorted_ptr_names():
     """Returns the expected order of names from the complex PTR block after numeric sorting."""
     return [
-        "1.1.1", "1.3.50", "1.255.255", "2.0.5", "5.40.2", "5.100.15", 
-        "8.8.8", "10.1.200", "10.10.10", "20.0.15", "20.5.100", "20.8.8", 
-        "30.50.120", "50.5.0", "51.5.0", "52.5.0", "70.60.45", "99.0.15", 
-        "99.99.99", "254.0.0"
+        "254.0.0",  
+        "50.5.0",   
+        "51.5.0",   
+        "52.5.0",   
+        "1.1.1",    
+        "5.40.2",   
+        "2.0.5",    
+        "8.8.8",    
+        "20.8.8",   
+        "10.10.10", 
+        "20.0.15",  
+        "99.0.15",  
+        "5.100.15", 
+        "70.60.45", 
+        "1.3.50",   
+        "99.99.99", 
+        "20.5.100", 
+        "30.50.120",
+        "10.1.200", 
+        "1.255.255" 
     ]

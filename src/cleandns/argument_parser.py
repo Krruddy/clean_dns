@@ -1,5 +1,6 @@
 import argparse
 from collections.abc import Sequence
+from src.cleandns.config import DNSConfig
 
 
 class ArgumentParser:
@@ -39,5 +40,14 @@ class ArgumentParser:
             help="Do not output the TTL value for individual records in the reconstructed file."
         )
 
-    def parse_arguments(self, args: Sequence[str] | None = None) -> argparse.Namespace:
-        return self.parser.parse_args(args)
+    def parse_arguments(self, args: Sequence[str] | None = None) -> tuple[DNSConfig, list[str]]:      
+        parsed_args = self.parser.parse_args(args)                                                    
+                                                                                                      
+        config = DNSConfig(                                                                           
+            omit_origin=parsed_args.omit_origin,                                                      
+            human_readable=parsed_args.human_readable,                                                
+            omit_ttl=parsed_args.omit_ttl,                                                            
+            omit_record_ttl=parsed_args.omit_record_ttl                                               
+        )                                                                                             
+                                                                                                      
+        return config, parsed_args.files if parsed_args.files else None

@@ -9,5 +9,8 @@ dependencies = [
     "pefile",
     "pywin32-ctypes",
     "setuptools",
-    "pytest"
+    "pytest",
+    "pyinstaller"
 ]
+[project.scripts]
+cleandns = "cleandns.main:main"

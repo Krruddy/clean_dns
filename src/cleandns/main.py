@@ -4,7 +4,7 @@ from src.cleandns.argument_parser import ArgumentParser
 from src.cleandns.dns_file import DNSFile
 from src.cleandns.logger import Logger
 
-def process_file(file_path: Path, logger: Logger, omit_origin: bool = False, human_readable: bool = False, omit_ttl: bool = False, omit_record_ttl: bool = False) -> bool:
+def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> bool:
     """
     Process a single DNS file. Returns True if successful, False otherwise.
     """
@@ -13,7 +13,7 @@ def process_file(file_path: Path, logger: Logger, omit_origin: bool = False, hum
         return False
 
     try:
-        dns_file = DNSFile(file_path, omit_origin=omit_origin, human_readable=human_readable, omit_ttl=omit_ttl, omit_record_ttl=omit_record_ttl)
+        dns_file = DNSFile(file_path, config)
         dns_file.remove_duplicates()
         dns_file.sort()
         dns_file.save()
@@ -28,21 +28,21 @@ def main():
     logger = Logger()
 
     arg_parser = ArgumentParser()
-    args = arg_parser.parse_arguments()
+    config, file_list = arg_parser.parse_arguments()
 
     files_to_process = []
 
-    if not args.files:
+    if not file_list:
         logger.warning("No files provided to process. Use --help for more information.")
         sys.exit(0)
 
-    files_to_process = [Path(f) for f in args.files]
+    files_to_process = [Path(f) for f in file_list]
 
     has_error = False
 
     # Process files sequentially
     for file_path in files_to_process:
-        success = process_file(file_path, logger, omit_origin=args.omit_origin, human_readable=args.human_readable, omit_ttl=args.omit_ttl, omit_record_ttl=args.omit_record_ttl)
+        success = process_file(file_path, logger, config)
         if not success:
             has_error = True
 

@@ -1,8 +1,9 @@
+from dns.zone import NoSOA
 import pytest
 from cleandns.dns_file import DNSFile
 from cleandns.exceptions import MissingSOArecord
 from cleandns.record_types import RecordType
-from tests.conftest import ZONE_FILE_ENCODING
+from tests.conftest import ZONE_FILE_ENCODING, sample_origin_line
 
 # --- Fixtures for Sample Data ---
 
@@ -26,46 +27,49 @@ def test_load_valid_zone(zone_file):
     dns = DNSFile(zone_file)
 
     assert dns.ttl == 3600
+    assert dns.origin == "example.com."
     assert dns.soa_record is not None
     assert dns.soa_record.serial == 2023101001
-    assert dns.soa_record.mname == "ns1.example.com."
+    assert dns.soa_record.mname == "ns1"
 
     # Check record counts
     assert len(dns.records[RecordType.A]) == 2
     assert len(dns.records[RecordType.NS]) == 2
     assert len(dns.records[RecordType.CNAME]) == 1
 
-def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_ns_block, simple_sample_a_records_block):
+def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, simple_sample_a_records_block):
     """
-    Test that a file missing an SOA record raises MissingSOArecord.
+    Test that a file missing an SOA record raises NoSOA exception.
     """
     content = (
         f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
         f"{sample_ns_block}\n"
         f"{simple_sample_a_records_block}\n"
     )
     p = tmp_path / "no_soa.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(MissingSOArecord):
+    with pytest.raises(NoSOA):
         DNSFile(p)
 
 def test_empty_file_raises_exception(tmp_path):
     """
-    Test that a completely empty file raises MissingSOArecord.
+    Test that a completely empty file raises NoSOA exception.
     """
     p = tmp_path / "empty.zone"
     p.write_text("", encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(MissingSOArecord):
+    with pytest.raises(NoSOA):
         DNSFile(p)
 
-def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block):
+def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origin_line):
     """
     Test that a file with an invalid TTL raises ValueError.
     """
     content = (
         "$TTL INVALID\n"
+        f"{sample_origin_line}\n"
         f"{sample_soa_block}\n"
     )
     p = tmp_path / "bad_ttl.zone"
@@ -85,12 +89,13 @@ def test_increment_serial(zone_file):
     dns.increment_serial()
     assert dns.soa_record.serial == old_serial + 1
 
-def test_remove_duplicates(tmp_path, sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block):
+def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block):
     """
     Test that duplicate records are removed and modified flag is set.
     """
     content = (
         f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
         f"{sample_soa_block}\n"
         f"{sample_ns_block}\n"
         f"{simple_sample_a_records_block}\n"
@@ -141,12 +146,13 @@ def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorte
     assert [record.name.rstrip('.') for record in records] == [n.rstrip('.') for n in expected_sorted_ptr_names]
     assert dns.modified is True
 
-def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_ns_block, sample_soa_block):
+def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, sample_soa_block):
     """
     Test that sorting ignores case (e.g., 'www' and 'WWW' are treated the same).
     """
     content = (
         f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
         f"{sample_soa_block}\n"
         f"{sample_ns_block}\n"
         "zzz IN A 1.1.1.1\n"
