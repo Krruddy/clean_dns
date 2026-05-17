@@ -70,6 +70,58 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origi
     with pytest.raises(InvalidZoneFile, match="Invalid TTL"):
         DNSFile(p, default_config)
 
+def test_ttl_string_format_is_parsed(tmp_path, sample_soa_block, sample_origin_line, sample_ns_block, default_config):
+    """$TTL in DNS string notation (e.g. 1h) must be converted to seconds."""
+    content = (
+        "$TTL 1h\n"
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n"
+        f"{sample_ns_block}\n"
+    )
+    p = tmp_path / "string_ttl.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    dns = DNSFile(p, default_config)
+    assert dns.ttl == 3600
+
+def test_missing_ttl_directive_is_allowed(tmp_path, sample_soa_block, sample_origin_line, sample_ns_block, default_config):
+    """A zone file without a $TTL directive must parse successfully with ttl=None."""
+    content = (
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n"
+        f"{sample_ns_block}\n"
+    )
+    p = tmp_path / "no_ttl.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    dns = DNSFile(p, default_config)
+    assert dns.ttl is None
+
+def test_zone_without_ns_raises_missing_soa(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, default_config):
+    """Zone without NS records is rejected by dnspython (NoNS), which surfaces as MissingSOArecord.
+
+    NOTE: the exception type is misleading — the SOA is present, the NS is missing.
+    This is a known gap; a dedicated InvalidZoneFile subclass for missing NS would be more accurate.
+    """
+    content = (
+        f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n"
+    )
+    p = tmp_path / "soa_only.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    with pytest.raises(MissingSOArecord, match="no NS RRset"):
+        DNSFile(p, default_config)
+
+def test_comments_only_file_raises_missing_soa(tmp_path, default_config):
+    """A file containing only comments must raise MissingSOArecord, not EmptyZoneFile."""
+    p = tmp_path / "comments.zone"
+    p.write_text("; this is just a comment\n", encoding=ZONE_FILE_ENCODING)
+
+    with pytest.raises(MissingSOArecord):
+        DNSFile(p, default_config)
+
 # --- Logic Tests ---
 
 def test_save_does_not_increment_serial_when_unmodified(zone_file, default_config):
