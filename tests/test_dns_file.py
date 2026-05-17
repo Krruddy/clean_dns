@@ -1,9 +1,9 @@
-from dns.zone import NoSOA
 import pytest
 from cleandns.dns_file import DNSFile
+from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
 from cleandns.exceptions import MissingSOArecord
 from cleandns.record_types import RecordType
-from tests.conftest import ZONE_FILE_ENCODING, sample_origin_line
+from tests.conftest import ZONE_FILE_ENCODING, default_config, sample_origin_line
 
 # --- Fixtures for Sample Data ---
 
@@ -19,12 +19,12 @@ def zone_file(tmp_path, forward_sample_zone_content):
 
 # --- Parsing Tests ---
 
-def test_load_valid_zone(zone_file):
+def test_load_valid_zone(zone_file, default_config):
     """
     Test that a valid zone file is parsed correctly.
     """
     assert zone_file.exists()
-    dns = DNSFile(zone_file)
+    dns = DNSFile(zone_file, default_config)
 
     assert dns.ttl == 3600
     assert dns.origin == "example.com."
@@ -37,7 +37,7 @@ def test_load_valid_zone(zone_file):
     assert len(dns.records[RecordType.NS]) == 2
     assert len(dns.records[RecordType.CNAME]) == 1
 
-def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, simple_sample_a_records_block):
+def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, simple_sample_a_records_block, default_config):
     """
     Test that a file missing an SOA record raises NoSOA exception.
     """
@@ -50,20 +50,20 @@ def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_l
     p = tmp_path / "no_soa.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(NoSOA):
-        DNSFile(p)
+    with pytest.raises(MissingSOArecord):
+        DNSFile(p, default_config)
 
-def test_empty_file_raises_exception(tmp_path):
+def test_empty_file_raises_exception(tmp_path, default_config):
     """
     Test that a completely empty file raises NoSOA exception.
     """
     p = tmp_path / "empty.zone"
     p.write_text("", encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(NoSOA):
-        DNSFile(p)
+    with pytest.raises(EmptyZoneFile):
+        DNSFile(p, default_config)
 
-def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origin_line):
+def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origin_line, default_config):
     """
     Test that a file with an invalid TTL raises ValueError.
     """
@@ -75,21 +75,21 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origi
     p = tmp_path / "bad_ttl.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(ValueError, match="Invalid TTL"):
-        DNSFile(p)
+    with pytest.raises(InvalidZoneFile, match="Invalid TTL"):
+        DNSFile(p, default_config)
 
 # --- Logic Tests ---
 
-def test_increment_serial(zone_file):
+def test_increment_serial(zone_file, default_config):
     """
     Test that the serial number is incremented correctly.
     """
-    dns = DNSFile(zone_file)
+    dns = DNSFile(zone_file, default_config)
     old_serial = dns.soa_record.serial
     dns.increment_serial()
     assert dns.soa_record.serial == old_serial + 1
 
-def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block):
+def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, default_config):
     """
     Test that duplicate records are removed and modified flag is set.
     """
@@ -103,7 +103,7 @@ def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample
     p = tmp_path / "dup.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    dns = DNSFile(p)
+    dns = DNSFile(p, default_config)
 
     # Manually add a duplicate record
     records = dns.records[RecordType.A]
@@ -115,7 +115,7 @@ def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample
     assert len(dns.records[RecordType.A]) == initial_count
     assert dns.modified is True
 
-def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_a_names):
+def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_a_names, default_config):
     """
     Test that A records are sorted alphabetically.
     """
@@ -123,7 +123,7 @@ def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_
     p = tmp_path / "unsorted.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    dns = DNSFile(p)
+    dns = DNSFile(p, default_config)
     dns.sort()
 
     records = dns.records[RecordType.A]
@@ -131,7 +131,7 @@ def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_
     assert [record.name.rstrip('.') for record in records] == [n.rstrip('.') for n in expected_sorted_a_names]
     assert dns.modified is True
 
-def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorted_ptr_names):
+def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorted_ptr_names, default_config):
     """
     Test that PTR records are sorted numerically.
     """
@@ -139,14 +139,14 @@ def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorte
     p = tmp_path / "unsorted.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    dns = DNSFile(p)
+    dns = DNSFile(p, default_config)
     dns.sort()
 
     records = dns.records[RecordType.PTR]
     assert [record.name.rstrip('.') for record in records] == [n.rstrip('.') for n in expected_sorted_ptr_names]
     assert dns.modified is True
 
-def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, sample_soa_block):
+def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, sample_soa_block, default_config):
     """
     Test that sorting ignores case (e.g., 'www' and 'WWW' are treated the same).
     """
@@ -162,7 +162,7 @@ def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_origin_line,
     p = tmp_path / "case.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    dns = DNSFile(p)
+    dns = DNSFile(p, default_config)
     dns.sort()
 
     names = [r.name.lower() for r in dns.records[RecordType.A]]
@@ -170,12 +170,12 @@ def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_origin_line,
 
 # --- File I/O Tests ---
 
-def test_save_creates_backup_and_updates_file(zone_file):
+def test_save_creates_backup_and_updates_file(zone_file, default_config):
     """
     Test that saving updates the file content and creates a backup.
     """
     original_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
-    dns = DNSFile(zone_file)
+    dns = DNSFile(zone_file, default_config)
     original_serial = dns.soa_record.serial
 
     # Mark as modified to trigger serial update and file write
