@@ -65,18 +65,20 @@ class SOARecord(AbstractRecord):
     @override
     def __str__(self) -> str:
         if self.human_readable:
-            self.refresh = self._format_time(self.refresh) if isinstance(self.refresh, int) else self.refresh
-            self.retry = self._format_time(self.retry) if isinstance(self.retry, int) else self.retry
-            self.expire = self._format_time(self.expire) if isinstance(self.expire, int) else self.expire
-            self.minimum = self._format_time(self.minimum) if isinstance(self.minimum, int) else self.minimum
+            refresh = self._format_time(self.refresh)
+            retry = self._format_time(self.retry)
+            expire = self._format_time(self.expire)
+            minimum = self._format_time(self.minimum)
+        else:
+            refresh, retry, expire, minimum = self.refresh, self.retry, self.expire, self.minimum
 
         return (
             f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname}\t{self.rname} (\n"
             f"\t{self.serial}\t; serial\n"
-            f"\t{self.refresh}\t; refresh\n"
-            f"\t{self.retry}\t; retry\n"
-            f"\t{self.expire}\t; expire\n"
-            f"\t{self.minimum}\t; minimum\n"
+            f"\t{refresh}\t; refresh\n"
+            f"\t{retry}\t; retry\n"
+            f"\t{expire}\t; expire\n"
+            f"\t{minimum}\t; minimum\n"
             f")"
         )
     
