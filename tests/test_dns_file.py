@@ -1,7 +1,7 @@
 import pytest
 from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
-from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
+from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile, MissingNSRecord
 from cleandns.exceptions import MissingSOArecord
 from cleandns.record_types import RecordType
 
@@ -97,12 +97,8 @@ def test_missing_ttl_directive_is_allowed(tmp_path, sample_soa_block, sample_ori
     dns = DNSFile(p, default_config)
     assert dns.ttl is None
 
-def test_zone_without_ns_raises_missing_soa(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, default_config):
-    """Zone without NS records is rejected by dnspython (NoNS), which surfaces as MissingSOArecord.
-
-    NOTE: the exception type is misleading — the SOA is present, the NS is missing.
-    This is a known gap; a dedicated InvalidZoneFile subclass for missing NS would be more accurate.
-    """
+def test_zone_without_ns_raises_missing_ns_record(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, default_config):
+    """Zone without NS records must raise MissingNSRecord, not the generic MissingSOArecord."""
     content = (
         f"{sample_ttl_line}\n"
         f"{sample_origin_line}\n"
@@ -111,7 +107,7 @@ def test_zone_without_ns_raises_missing_soa(tmp_path, sample_ttl_line, sample_or
     p = tmp_path / "soa_only.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(MissingSOArecord, match="no NS RRset"):
+    with pytest.raises(MissingNSRecord):
         DNSFile(p, default_config)
 
 def test_comments_only_file_raises_missing_soa(tmp_path, default_config):

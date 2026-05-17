@@ -1,7 +1,7 @@
 from datetime import datetime
 from collections import defaultdict
 
-from cleandns.exceptions import MissingSOArecord, InvalidZoneFile, EmptyZoneFile
+from cleandns.exceptions import MissingSOArecord, MissingNSRecord, InvalidZoneFile, EmptyZoneFile
 from cleandns.logger import Logger
 from cleandns.config import DNSConfig
 
@@ -64,8 +64,12 @@ class DNSFile:
 
         try:
             zone = dns.zone.from_text(file_content)
+        except dns.zone.NoSOA as e:
+            raise MissingSOArecord(f"Missing SOA record in {self.path.name}") from e
+        except dns.zone.NoNS as e:
+            raise MissingNSRecord(f"Missing NS record in {self.path.name}") from e
         except dns.exception.DNSException as e:
-            raise MissingSOArecord(f"Could not parse zone file {self.path.name}: {e}") from e
+            raise InvalidZoneFile(f"Could not parse zone file {self.path.name}: {e}") from e
 
         self.origin = zone.origin.to_text()
 
