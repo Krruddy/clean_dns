@@ -164,7 +164,7 @@ class DNSFile:
     def __tmp_path(self) -> Path:
         return self.path.with_name(f"{self.path.name}.tmp")
 
-    def reconstruct_file(self):
+    def _reconstruct_file(self):
         """
         Reconstructs the DNS file with the current records and writes it to a temporary file.
         """
@@ -219,7 +219,7 @@ class DNSFile:
             self.logger.warning(f"The file {self.__tmp_path.name} already exists and is going to be overwritten.")
             return open(self.__tmp_path, "w")
 
-    def replace_file(self):
+    def _replace_file(self):
         """
         Replaces the original DNS file with the newly reconstructed temporary file,
         while creating a backup of the original file with a timestamped name.
@@ -244,5 +244,5 @@ class DNSFile:
         """
         if self.modified:
             self.increment_serial()
-            self.reconstruct_file()
-            self.replace_file()
+            self._reconstruct_file()
+            self._replace_file()
