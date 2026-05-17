@@ -13,6 +13,9 @@ dev = [
     "pytest>=7.0",
     "pyright>=1.1",
 ]
+build = [
+    "pyinstaller>=6.0",
+]
 
 [project.scripts]
 cleandns = "cleandns.main:main"
