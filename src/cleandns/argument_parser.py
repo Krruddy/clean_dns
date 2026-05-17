@@ -50,4 +50,4 @@ class ArgumentParser:
             omit_record_ttl=parsed_args.omit_record_ttl                                               
         )                                                                                             
                                                                                                       
-        return config, parsed_args.files if parsed_args.files else None
+        return config, parsed_args.files or []

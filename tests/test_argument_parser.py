@@ -16,11 +16,11 @@ def test_parse_arguments_files_long_flag():
     assert file_list == ["file1.dns", "file2.dns", "file3.dns"]
 
 def test_no_arguments_provided():
-    """Test that files is None if -f is not provided."""
+    """Test that files is an empty list if -f is not provided."""
     parser = ArgumentParser()
     _, file_list = parser.parse_arguments([])
 
-    assert file_list is None
+    assert file_list == []
 
 def test_flag_provided_without_values():
     """Test that parser exits if -f is provided but no files follow (nargs='+')."""
