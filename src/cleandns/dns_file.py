@@ -1,6 +1,5 @@
 from datetime import datetime
 from collections import defaultdict
-from sys import exception
 
 from cleandns.exceptions import MissingSOArecord, InvalidZoneFile, EmptyZoneFile
 from cleandns.logger import Logger
