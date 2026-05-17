@@ -1,8 +1,8 @@
 import pytest
 from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
-from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile, MissingNSRecord
-from cleandns.exceptions import MissingSOArecord
+from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
+from cleandns.exceptions import MissingSOARecordError
 from cleandns.record_types import RecordType
 
 ZONE_FILE_ENCODING = "utf-8"
@@ -46,19 +46,19 @@ def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_l
     p = tmp_path / "no_soa.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(MissingSOArecord):
+    with pytest.raises(MissingSOARecordError):
         DNSFile(p, default_config)
 
 def test_empty_file_raises_exception(tmp_path, default_config):
-    """Blank file must raise EmptyZoneFile, not the generic MissingSOArecord."""
+    """Blank file must raise EmptyZoneFileError, not the generic MissingSOARecordError."""
     p = tmp_path / "empty.zone"
     p.write_text("", encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(EmptyZoneFile):
+    with pytest.raises(EmptyZoneFileError):
         DNSFile(p, default_config)
 
 def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origin_line, default_config):
-    """Non-numeric $TTL must raise InvalidZoneFile."""
+    """Non-numeric $TTL must raise InvalidZoneFileError."""
     content = (
         "$TTL INVALID\n"
         f"{sample_origin_line}\n"
@@ -67,7 +67,7 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origi
     p = tmp_path / "bad_ttl.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(InvalidZoneFile, match="Invalid TTL"):
+    with pytest.raises(InvalidZoneFileError, match="Invalid TTL"):
         DNSFile(p, default_config)
 
 def test_ttl_string_format_is_parsed(tmp_path, sample_soa_block, sample_origin_line, sample_ns_block, default_config):
@@ -98,7 +98,7 @@ def test_missing_ttl_directive_is_allowed(tmp_path, sample_soa_block, sample_ori
     assert dns.ttl is None
 
 def test_zone_without_ns_raises_missing_ns_record(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, default_config):
-    """Zone without NS records must raise MissingNSRecord, not the generic MissingSOArecord."""
+    """Zone without NS records must raise MissingNSRecordError, not the generic MissingSOARecordError."""
     content = (
         f"{sample_ttl_line}\n"
         f"{sample_origin_line}\n"
@@ -107,15 +107,15 @@ def test_zone_without_ns_raises_missing_ns_record(tmp_path, sample_ttl_line, sam
     p = tmp_path / "soa_only.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(MissingNSRecord):
+    with pytest.raises(MissingNSRecordError):
         DNSFile(p, default_config)
 
 def test_comments_only_file_raises_missing_soa(tmp_path, default_config):
-    """A file containing only comments must raise MissingSOArecord, not EmptyZoneFile."""
+    """A file containing only comments must raise MissingSOARecordError, not EmptyZoneFileError."""
     p = tmp_path / "comments.zone"
     p.write_text("; this is just a comment\n", encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(MissingSOArecord):
+    with pytest.raises(MissingSOARecordError):
         DNSFile(p, default_config)
 
 # --- Logic Tests ---

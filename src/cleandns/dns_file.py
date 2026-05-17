@@ -1,7 +1,7 @@
 from datetime import datetime
 from collections import defaultdict
 
-from cleandns.exceptions import MissingSOArecord, MissingNSRecord, InvalidZoneFile, EmptyZoneFile
+from cleandns.exceptions import MissingSOARecordError, MissingNSRecordError, InvalidZoneFileError, EmptyZoneFileError
 from cleandns.logger import Logger
 from cleandns.config import DNSConfig
 
@@ -50,7 +50,7 @@ class DNSFile:
                         try:
                             self.ttl = dns.ttl.from_text(parts[1])
                         except (ValueError, dns.ttl.BadTTL) as e:
-                            raise InvalidZoneFile(f"Invalid TTL format in {self.path.name}: {parts[1]}") from e
+                            raise InvalidZoneFileError(f"Invalid TTL format in {self.path.name}: {parts[1]}") from e
                     break
 
     def __set_DNS_records(self):
@@ -60,16 +60,16 @@ class DNSFile:
         with open(self.path, "r") as file:
             file_content = file.read()
         if not file_content.strip():
-            raise EmptyZoneFile(f"Zone file {self.path.name} is empty or contains only whitespace.")
+            raise EmptyZoneFileError(f"Zone file {self.path.name} is empty or contains only whitespace.")
 
         try:
             zone = dns.zone.from_text(file_content)
         except dns.zone.NoSOA as e:
-            raise MissingSOArecord(f"Missing SOA record in {self.path.name}") from e
+            raise MissingSOARecordError(f"Missing SOA record in {self.path.name}") from e
         except dns.zone.NoNS as e:
-            raise MissingNSRecord(f"Missing NS record in {self.path.name}") from e
+            raise MissingNSRecordError(f"Missing NS record in {self.path.name}") from e
         except dns.exception.DNSException as e:
-            raise InvalidZoneFile(f"Could not parse zone file {self.path.name}: {e}") from e
+            raise InvalidZoneFileError(f"Could not parse zone file {self.path.name}: {e}") from e
 
         self.origin = zone.origin.to_text()
 
@@ -118,7 +118,7 @@ class DNSFile:
                         self.soa_record = current_record
 
         if self.soa_record is None:
-            raise MissingSOArecord(f"Missing SOA record in {self.path.name}")
+            raise MissingSOARecordError(f"Missing SOA record in {self.path.name}")
 
     def increment_serial(self):
         """

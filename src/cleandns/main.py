@@ -4,7 +4,7 @@ from cleandns.argument_parser import ArgumentParser
 from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
 from cleandns.logger import Logger
-from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile, MissingNSRecord
+from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
 
 def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
     """
@@ -30,13 +30,13 @@ def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
     except OSError as e:
         logger.error(f"OS error while processing '{file_path}'\n{e}")
         return 1
-    except EmptyZoneFile as e:
+    except EmptyZoneFileError as e:
         logger.error(f"Invalid zone file: '{file_path}'\n{e}")
         return 1
-    except MissingNSRecord as e:
+    except MissingNSRecordError as e:
         logger.error(f"Invalid zone file: '{file_path}'\n{e}")
         return 1
-    except InvalidZoneFile as e:
+    except InvalidZoneFileError as e:
         logger.error(f"Invalid zone file: '{file_path}'\n{e}")
         return 1
 
