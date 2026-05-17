@@ -241,5 +241,5 @@ class DNSFile:
         """
         if self.modified:
             self.increment_serial()
-        self.reconstruct_file()
-        self.replace_file()
+            self.reconstruct_file()
+            self.replace_file()
