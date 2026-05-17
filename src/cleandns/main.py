@@ -7,7 +7,7 @@ from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
 
 def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> int:
     """
-    Process a single DNS file. Returns True if successful, False otherwise.
+    Process a single DNS file. Returns 0 on success, 1 on failure.
     """
     if not file_path.is_file():
         logger.warning(f"Skipping {file_path}: Not a valid file.")
