@@ -3,14 +3,19 @@ name = "clean_dns"
 version = "0.1.0"
 description = "The purpose of this project is to use Python to manage Domain Name System (DNS) zone files."
 readme = "README.md"
+requires-python = ">=3.12"
 dependencies = [
-    "dnspython",
-    "packaging",
-    "pefile",
-    "pywin32-ctypes",
-    "setuptools",
-    "pytest",
-    "pyinstaller"
+    "dnspython>=2.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
 [project.scripts]
 cleandns = "cleandns.main:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.backends.legacy:build"
