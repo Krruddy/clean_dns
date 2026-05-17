@@ -22,9 +22,6 @@ def zone_file(tmp_path, forward_sample_zone_content):
 # --- Parsing Tests ---
 
 def test_load_valid_zone(zone_file, default_config):
-    """
-    Test that a valid zone file is parsed correctly.
-    """
     assert zone_file.exists()
     dns = DNSFile(zone_file, default_config)
 
@@ -40,9 +37,6 @@ def test_load_valid_zone(zone_file, default_config):
     assert len(dns.records[RecordType.CNAME]) == 1
 
 def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, simple_sample_a_records_block, default_config):
-    """
-    Test that a file missing an SOA record raises NoSOA exception.
-    """
     content = (
         f"{sample_ttl_line}\n"
         f"{sample_origin_line}\n"
@@ -56,9 +50,7 @@ def test_missing_soa_raises_exception(tmp_path, sample_ttl_line, sample_origin_l
         DNSFile(p, default_config)
 
 def test_empty_file_raises_exception(tmp_path, default_config):
-    """
-    Test that a completely empty file raises NoSOA exception.
-    """
+    """Blank file must raise EmptyZoneFile, not the generic MissingSOArecord."""
     p = tmp_path / "empty.zone"
     p.write_text("", encoding=ZONE_FILE_ENCODING)
 
@@ -66,9 +58,7 @@ def test_empty_file_raises_exception(tmp_path, default_config):
         DNSFile(p, default_config)
 
 def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origin_line, default_config):
-    """
-    Test that a file with an invalid TTL raises ValueError.
-    """
+    """Non-numeric $TTL must raise InvalidZoneFile."""
     content = (
         "$TTL INVALID\n"
         f"{sample_origin_line}\n"
@@ -83,9 +73,6 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origi
 # --- Logic Tests ---
 
 def test_save_does_not_increment_serial_when_unmodified(zone_file, default_config):
-    """
-    Test that save() does not increment the serial when no changes were made.
-    """
     dns = DNSFile(zone_file, default_config)
     original_serial = dns.soa_record.serial
     assert dns.modified is False
@@ -95,9 +82,7 @@ def test_save_does_not_increment_serial_when_unmodified(zone_file, default_confi
     assert dns.soa_record.serial == original_serial
 
 def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, default_config):
-    """
-    Test that duplicate records are removed and modified flag is set.
-    """
+    """remove_duplicates() must shrink the record list and set modified=True."""
     content = (
         f"{sample_ttl_line}\n"
         f"{sample_origin_line}\n"
@@ -121,9 +106,6 @@ def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample
     assert dns.modified is True
 
 def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_a_names, default_config):
-    """
-    Test that A records are sorted alphabetically.
-    """
     content = complex_forward_zone_content
     p = tmp_path / "unsorted.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
@@ -137,9 +119,6 @@ def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_
     assert dns.modified is True
 
 def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorted_ptr_names, default_config):
-    """
-    Test that PTR records are sorted numerically.
-    """
     content = complex_reverse_zone_content
     p = tmp_path / "unsorted.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
@@ -180,9 +159,6 @@ def test_omit_record_ttl_excluded_from_output(zone_file):
 # --- File I/O Tests ---
 
 def test_save_creates_backup_and_updates_file(zone_file, default_config):
-    """
-    Test that saving updates the file content and creates a backup.
-    """
     original_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
     dns = DNSFile(zone_file, default_config)
     original_serial = dns.soa_record.serial
