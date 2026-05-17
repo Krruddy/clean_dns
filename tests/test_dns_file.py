@@ -122,6 +122,7 @@ def test_comments_only_file_raises_missing_soa(tmp_path, default_config):
 
 def test_save_does_not_increment_serial_when_unmodified(zone_file, default_config):
     dns = DNSFile(zone_file, default_config)
+    assert dns.soa_record is not None
     original_serial = dns.soa_record.serial
     assert dns.modified is False
 
@@ -210,6 +211,7 @@ def test_full_pipeline_round_trip(tmp_path, complex_forward_zone_content, expect
 
     # Run the pipeline
     dns = DNSFile(p, default_config)
+    assert dns.soa_record is not None
     original_serial = dns.soa_record.serial
     dns.remove_duplicates()
     dns.sort()
@@ -217,6 +219,7 @@ def test_full_pipeline_round_trip(tmp_path, complex_forward_zone_content, expect
 
     # Reload from disk — verifies the saved file is a valid, parseable zone
     reloaded = DNSFile(p, default_config)
+    assert reloaded.soa_record is not None
 
     assert reloaded.soa_record.serial == original_serial + 1
     assert [r.name.rstrip(".") for r in reloaded.records[RecordType.A]] == [n.rstrip(".") for n in expected_sorted_a_names]
@@ -226,6 +229,7 @@ def test_full_pipeline_round_trip(tmp_path, complex_forward_zone_content, expect
 def test_save_creates_backup_and_updates_file(zone_file, default_config):
     original_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
     dns = DNSFile(zone_file, default_config)
+    assert dns.soa_record is not None
     original_serial = dns.soa_record.serial
 
     # Mark as modified to trigger serial update and file write

@@ -7,6 +7,7 @@ from cleandns.config import DNSConfig
 
 import os
 import shutil
+import dns.exception
 import dns.zone
 import dns.rdataclass
 import dns.ttl
@@ -71,7 +72,8 @@ class DNSFile:
         except dns.exception.DNSException as e:
             raise InvalidZoneFileError(f"Could not parse zone file {self.path.name}: {e}") from e
 
-        self.origin = zone.origin.to_text()
+        if zone.origin is not None:
+            self.origin = zone.origin.to_text()
 
         # Mapping for standard records that share the same constructor signature
         record_types = {
