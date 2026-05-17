@@ -19,10 +19,23 @@ def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> in
         dns_file.sort()
         dns_file.save()
         logger.info(f"Successfully processed {file_path.name}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to process {file_path.name}: {e}")
-        return False
+        return 0
+    except FileNotFoundError as e:
+        logger.error(f"File not found: '{file_path}'\n{e}")
+        return 1
+    except PermissionError as e:
+        logger.error(f"Permission denied: '{file_path}'\n{e}")
+        return 1
+    except OSError as e:
+        logger.error(f"OS error while processing '{file_path}'\n{e}")
+        return 1
+    except EmptyZoneFile as e:
+        logger.error(f"Invalid zone file: '{file_path}'\n{e}")
+        return 1
+    except InvalidZoneFile as e:
+        logger.error(f"Invalid zone file: '{file_path}'\n{e}")
+        return 1
+
 
 def main():
     # Initialize the singleton logger (configuration is handled inside the class)
@@ -35,20 +48,24 @@ def main():
 
     if not file_list:
         logger.warning("No files provided to process. Use --help for more information.")
-        sys.exit(0)
+        return 0
 
     files_to_process = [Path(f) for f in file_list]
 
-    has_error = False
+    failed_files = []
 
     # Process files sequentially
     for file_path in files_to_process:
-        success = process_file(file_path, logger, config)
-        if not success:
-            has_error = True
+        if not process_file(file_path, logger, config):
+            failed_files.append(file_path.name) 
+            logger.error(f"Failed to process {file_path.name}")
 
-    # Exit with non-zero code if any file failed
-    sys.exit(1 if has_error else 0)
+    if failed_files:
+        logger.error(f"Failed to process the following files: {', '.join(failed_files)}")
+        return 1
+
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
