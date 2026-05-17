@@ -56,7 +56,7 @@ def main():
 
     # Process files sequentially
     for file_path in files_to_process:
-        if not process_file(file_path, logger, config):
+        if process_file(file_path, logger, config) != 0:
             failed_files.append(file_path.name) 
             logger.error(f"Failed to process {file_path.name}")
 

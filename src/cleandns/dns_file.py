@@ -157,7 +157,6 @@ class DNSFile:
                 records[:] = new_order
                 self.modified = True
 
-
     @property
     def __tmp_path(self) -> Path:
         return self.path.with_name(f"{self.path.name}.tmp")
