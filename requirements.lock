@@ -29,6 +29,8 @@ pyright==1.1.409
     # via clean_dns (pyproject.toml)
 pytest==9.0.3
     # via clean_dns (pyproject.toml)
+pyyaml==6.0.3
+    # via clean_dns (pyproject.toml)
 typing-extensions==4.15.0
     # via pyright
 
