@@ -1,16 +1,17 @@
 import sys
 from pathlib import Path
-from src.cleandns.argument_parser import ArgumentParser
-from src.cleandns.dns_file import DNSFile
-from src.cleandns.logger import Logger
+from cleandns.argument_parser import ArgumentParser
+from cleandns.dns_file import DNSFile
+from cleandns.logger import Logger
+from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
 
-def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> bool:
+def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> int:
     """
     Process a single DNS file. Returns True if successful, False otherwise.
     """
     if not file_path.is_file():
         logger.warning(f"Skipping {file_path}: Not a valid file.")
-        return False
+        return 1
 
     try:
         dns_file = DNSFile(file_path, config)

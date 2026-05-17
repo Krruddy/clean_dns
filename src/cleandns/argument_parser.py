@@ -1,6 +1,6 @@
 import argparse
 from collections.abc import Sequence
-from src.cleandns.config import DNSConfig
+from cleandns.config import DNSConfig
 
 
 class ArgumentParser:
