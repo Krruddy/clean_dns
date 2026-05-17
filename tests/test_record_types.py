@@ -92,6 +92,13 @@ def test_soa_str_is_idempotent():
     soa = make_soa_record(human_readable=True)
     assert str(soa) == str(soa)
 
+@pytest.mark.parametrize("omit_ttl,present", [(False, True), (True, False)])
+def test_soa_str_ttl_visibility(omit_ttl, present):
+    """SOARecord must honour omit_ttl in the same way as AbstractRecord."""
+    # Use a TTL value distinct from all timing fields (refresh=3600, retry=1800, etc.)
+    # to avoid a false positive when checking for its presence in the output.
+    assert ("7200" in str(make_soa_record(ttl=7200, omit_ttl=omit_ttl))) == present
+
 
 # --- SOARecord._format_time ---
 

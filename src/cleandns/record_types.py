@@ -71,8 +71,13 @@ class SOARecord(AbstractRecord):
         else:
             refresh, retry, expire, minimum = self.refresh, self.retry, self.expire, self.minimum
 
+        if self.omit_ttl:
+            header = f"{self.name}\t{self.class_.value}\t{self.type.value}\t{self.mname}\t{self.rname} ("
+        else:
+            header = f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname}\t{self.rname} ("
+
         return (
-            f"{self.name}\t{self.ttl}\t{self.class_.value}\t{self.type.value}\t{self.mname}\t{self.rname} (\n"
+            f"{header}\n"
             f"\t{self.serial}\t; serial\n"
             f"\t{refresh}\t; refresh\n"
             f"\t{retry}\t; retry\n"
