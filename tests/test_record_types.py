@@ -91,3 +91,19 @@ def test_soa_str_is_idempotent():
     """Calling str() twice on the same SOARecord must give identical results."""
     soa = make_soa_record(human_readable=True)
     assert str(soa) == str(soa)
+
+
+# --- SOARecord._format_time ---
+
+@pytest.mark.parametrize("seconds,expected", [
+    (0,      ""),       # no units match → empty string
+    (1,      "1s"),
+    (60,     "1m"),
+    (3600,   "1h"),
+    (86400,  "1d"),
+    (604800, "1W"),
+    (90061,  "1d1h1m1s"),  # multi-unit: 1 day + 1 hour + 1 min + 1 sec
+])
+def test_format_time(seconds, expected):
+    """_format_time must convert seconds to the correct human-readable string."""
+    assert make_soa_record()._format_time(seconds) == expected
