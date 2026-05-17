@@ -225,7 +225,7 @@ class DNSFile:
         while creating a backup of the original file with a timestamped name.
         """
 
-        current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
         backup_path = self.path.with_name(f"{self.path.name}.{current_date}")
 
         if self.path.exists():
