@@ -4,7 +4,8 @@ from cleandns.dns_file import DNSFile
 from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
 from cleandns.exceptions import MissingSOArecord
 from cleandns.record_types import RecordType
-from tests.conftest import ZONE_FILE_ENCODING, default_config, sample_origin_line
+
+ZONE_FILE_ENCODING = "utf-8"
 
 # --- Fixtures for Sample Data ---
 

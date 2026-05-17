@@ -1,8 +1,6 @@
 import pytest
 from cleandns.config import DNSConfig
 
-ZONE_FILE_ENCODING = "utf-8"
-
 @pytest.fixture
 def default_config():
     return DNSConfig(omit_origin=False, human_readable=False, omit_ttl=False, omit_record_ttl=False)
