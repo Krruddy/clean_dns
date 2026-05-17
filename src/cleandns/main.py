@@ -48,8 +48,6 @@ def main():
     arg_parser = ArgumentParser()
     config, file_list = arg_parser.parse_arguments()
 
-    files_to_process = []
-
     if not file_list:
         logger.warning("No files provided to process. Use --help for more information.")
         return 0
