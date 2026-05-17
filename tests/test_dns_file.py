@@ -132,21 +132,17 @@ def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorte
 
 # --- Config Flag Output Tests ---
 
-def test_omit_ttl_excluded_from_output(zone_file):
-    """omit_ttl=True must produce a file with no $TTL directive."""
-    config = DNSConfig(omit_origin=False, human_readable=False, omit_ttl=True, omit_record_ttl=False)
+@pytest.mark.parametrize("flag,directive", [
+    ("omit_ttl",    "$TTL"),
+    ("omit_origin", "$ORIGIN"),
+])
+def test_directive_omitted_when_flag_set(zone_file, flag, directive):
+    """Setting an omit_* flag must remove the corresponding directive from the output file."""
+    config = DNSConfig(**{flag: True})
     dns = DNSFile(zone_file, config)
     dns.modified = True
     dns.save()
-    assert "$TTL" not in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
-
-def test_omit_origin_excluded_from_output(zone_file):
-    """omit_origin=True must produce a file with no $ORIGIN directive."""
-    config = DNSConfig(omit_origin=True, human_readable=False, omit_ttl=False, omit_record_ttl=False)
-    dns = DNSFile(zone_file, config)
-    dns.modified = True
-    dns.save()
-    assert "$ORIGIN" not in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+    assert directive not in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
 
 def test_omit_record_ttl_excluded_from_output(zone_file):
     """omit_record_ttl=True must omit the TTL column from all record string representations."""
