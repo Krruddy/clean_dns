@@ -63,6 +63,11 @@ k8s-master-01  IN    A    10.8.8.8
 k8s-worker-01  IN    A    10.8.8.20"""
 
 @pytest.fixture
+def simple_sample_aaaa_records_block():
+    return """www     IN  AAAA    2001:db8::1
+mail    IN  AAAA    2001:db8::2"""
+
+@pytest.fixture
 def simple_sample_cname_records_block():
     return """ftp    IN  CNAME   www
 """
@@ -102,8 +107,8 @@ def complex_sample_ptr_records_block():
 20.8.8         IN    PTR    k8s-worker-01.krruddy.com."""
 
 @pytest.fixture
-def forward_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, simple_sample_cname_records_block):
-    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n{simple_sample_cname_records_block}\n"
+def forward_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, simple_sample_aaaa_records_block, simple_sample_cname_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n{simple_sample_aaaa_records_block}\n{simple_sample_cname_records_block}\n"
 
 @pytest.fixture
 def reverse_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_ptr_records_block):

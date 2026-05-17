@@ -33,6 +33,7 @@ def test_load_valid_zone(zone_file, default_config):
 
     # Check record counts
     assert len(dns.records[RecordType.A]) == 2
+    assert len(dns.records[RecordType.AAAA]) == 2
     assert len(dns.records[RecordType.NS]) == 2
     assert len(dns.records[RecordType.CNAME]) == 1
 
