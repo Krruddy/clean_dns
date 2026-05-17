@@ -81,21 +81,9 @@ def test_save_does_not_increment_serial_when_unmodified(zone_file, default_confi
 
     assert dns.soa_record.serial == original_serial
 
-def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, default_config):
+def test_remove_duplicates(zone_file, default_config):
     """remove_duplicates() must shrink the record list and set modified=True."""
-    content = (
-        f"{sample_ttl_line}\n"
-        f"{sample_origin_line}\n"
-        f"{sample_soa_block}\n"
-        f"{sample_ns_block}\n"
-        f"{simple_sample_a_records_block}\n"
-    )
-    p = tmp_path / "dup.zone"
-    p.write_text(content, encoding=ZONE_FILE_ENCODING)
-
-    dns = DNSFile(p, default_config)
-
-    # Manually add a duplicate record
+    dns = DNSFile(zone_file, default_config)
     records = dns.records[RecordType.A]
     initial_count = len(records)
     records.append(records[0])
@@ -106,9 +94,8 @@ def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample
     assert dns.modified is True
 
 def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_a_names, default_config):
-    content = complex_forward_zone_content
     p = tmp_path / "unsorted.zone"
-    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
 
     dns = DNSFile(p, default_config)
     dns.sort()
