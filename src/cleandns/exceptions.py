@@ -1,15 +1,11 @@
-class NoChangesMade(Exception):
-    """Raised when no changes were made."""
-    pass
+class CleanDNSError(Exception):
+    """Base for all errors this library raises intentionally."""
 
-class IdenticalEntries(Exception):
-    """Raised when entries are identical."""
-    pass
+class InvalidZoneFile(CleanDNSError):
+    """The zone file could not be parsed or is structurally invalid."""
 
-class UnknownRecordType(Exception):
-    """Raised when a record type is unknown."""
-    pass
-
-class MissingSOArecord(Exception):
+class MissingSOArecord(InvalidZoneFile):
     """Raised when the SOA record is missing."""
-    pass
+
+class EmptyZoneFile(InvalidZoneFile):
+    """The file contains no parseable zone content (blank, whitespace, or comments only)."""

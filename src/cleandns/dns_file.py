@@ -1,8 +1,9 @@
 from datetime import datetime
 from collections import defaultdict
+from sys import exception
 
-from cleandns.exceptions import MissingSOArecord
-from src.cleandns.logger import Logger
+from cleandns.exceptions import MissingSOArecord, InvalidZoneFile, EmptyZoneFile
+from cleandns.logger import Logger
 from cleandns.config import DNSConfig
 
 import os
@@ -49,8 +50,8 @@ class DNSFile:
                     if len(parts) == 2:
                         try:
                             self.ttl = dns.ttl.from_text(parts[1])
-                        except (ValueError, dns.ttl.BadTTL):
-                            raise ValueError(f"Invalid TTL format in {self.path.name}: {parts[1]}")
+                        except (ValueError, dns.ttl.BadTTL) as e:
+                            raise InvalidZoneFile(f"Invalid TTL format in {self.path.name}: {parts[1]}") from e
                     break
 
     def __set_DNS_records(self):
@@ -59,8 +60,13 @@ class DNSFile:
 
         with open(self.path, "r") as file:
             file_content = file.read()
+        if not file_content.strip():
+            raise EmptyZoneFile(f"Zone file {self.path.name} is empty or contains only whitespace.")
 
-        zone = dns.zone.from_text(file_content)
+        try:
+            zone = dns.zone.from_text(file_content)
+        except dns.exception.DNSException as e:
+            raise MissingSOArecord(f"Could not parse zone file {self.path.name}: {e}") from e
 
         self.origin = zone.origin.to_text()
 
