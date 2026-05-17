@@ -169,56 +169,50 @@ class DNSFile:
         """
         Reconstructs the DNS file with the current records and writes it to a temporary file.
         """
-        # Open the file
-        new_file = self.__create_tmp_file()
-
-        # Add the default TTL
-        if self.ttl is not None and not self.config.omit_ttl:
-            _ = new_file.write(f"$TTL\t{self.ttl}\n")
-
-        # Add the $ORIGIN directive
-        if self.origin is not None and not self.config.omit_origin:
-            _ = new_file.write(f"$ORIGIN\t{self.origin}\n")
-
-        # Add a blank line for readability
-        _ = new_file.write("\n")
-
-        # Add the SOA record
-        if self.soa_record:
-            _ = new_file.write(f"{self.soa_record}\n")
-
-        # Add a blank line for readability
-        _ = new_file.write("\n")
-
-        # Add the NS records
-        if RecordType.NS in self.records:
-            for record in self.records[RecordType.NS]:
-                _ = new_file.write(f"{record}\n")
-
-        # Add a blank line for readability
-        _ = new_file.write("\n")
-
-        # Add the rest of the records
-        for r_type, records in self.records.items():
-            if r_type != RecordType.NS:
-                for record in records:
-                    _ = new_file.write(f"{record}\n")
-
-        # Close the file
-        new_file.close()
-
-    def __create_tmp_file(self):
-        """
-        Creates a temporary file for writing the new DNS zone data.
-        If the file already exists, it will be overwritten.
-        """
         # Create tmp file in the same directory as the original to ensure atomic move later
-        try:
-            self.logger.info(f"Creating the file {self.__tmp_path.name} ...")
-            return open(self.__tmp_path, "x")
-        except FileExistsError:
+        mode = "x"
+        if self.__tmp_path.exists():
             self.logger.warning(f"The file {self.__tmp_path.name} already exists and is going to be overwritten.")
-            return open(self.__tmp_path, "w")
+            mode = "w"
+        else:
+            self.logger.info(f"Creating the file {self.__tmp_path.name} ...")
+
+        try:
+            with open(self.__tmp_path, mode) as f:
+                # Add the default TTL
+                if self.ttl is not None and not self.config.omit_ttl:
+                    f.write(f"$TTL\t{self.ttl}\n")
+
+                # Add the $ORIGIN directive
+                if self.origin is not None and not self.config.omit_origin:
+                    f.write(f"$ORIGIN\t{self.origin}\n")
+
+                # Add a blank line for readability
+                f.write("\n")
+
+                # Add the SOA record
+                if self.soa_record:
+                    f.write(f"{self.soa_record}\n")
+
+                # Add a blank line for readability
+                f.write("\n")
+
+                # Add the NS records
+                if RecordType.NS in self.records:
+                    for record in self.records[RecordType.NS]:
+                        f.write(f"{record}\n")
+
+                # Add a blank line for readability
+                f.write("\n")
+
+                # Add the rest of the records
+                for r_type, records in self.records.items():
+                    if r_type != RecordType.NS:
+                        for record in records:
+                            f.write(f"{record}\n")
+        except Exception:
+            self.__tmp_path.unlink(missing_ok=True)
+            raise
 
     def _replace_file(self):
         """
