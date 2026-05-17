@@ -93,6 +93,20 @@ def test_remove_duplicates(zone_file, default_config):
     assert len(dns.records[RecordType.A]) == initial_count
     assert dns.modified is True
 
+def test_remove_duplicates_no_change_leaves_modified_false(zone_file, default_config):
+    """remove_duplicates() on a duplicate-free zone must not set modified=True."""
+    dns = DNSFile(zone_file, default_config)
+    dns.remove_duplicates()
+    assert dns.modified is False
+
+def test_sort_no_change_leaves_modified_false(zone_file, default_config):
+    """sort() on an already-sorted zone must not set modified=True."""
+    dns = DNSFile(zone_file, default_config)
+    dns.sort()           # bring into sorted order
+    dns.modified = False  # reset
+    dns.sort()           # second pass must be a no-op
+    assert dns.modified is False
+
 def test_sort_a_records(tmp_path, complex_forward_zone_content, expected_sorted_a_names, default_config):
     p = tmp_path / "unsorted.zone"
     p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
