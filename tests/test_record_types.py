@@ -29,13 +29,10 @@ def make_soa_record(human_readable=False, refresh=3600, retry=1800, expire=60480
 
 # --- AbstractRecord.__str__ ---
 
-def test_record_str_includes_ttl():
-    """omit_ttl=False: TTL must appear in the serialized record."""
-    assert "3600" in str(make_a_record(omit_ttl=False))
-
-def test_record_str_omits_ttl():
-    """omit_ttl=True: TTL must not appear in the serialized record."""
-    assert "3600" not in str(make_a_record(omit_ttl=True))
+@pytest.mark.parametrize("omit_ttl,present", [(False, True), (True, False)])
+def test_record_str_ttl_visibility(omit_ttl, present):
+    """TTL appears in the serialized record iff omit_ttl=False."""
+    assert ("3600" in str(make_a_record(omit_ttl=omit_ttl))) == present
 
 
 # --- AbstractRecord.__lt__ ---
