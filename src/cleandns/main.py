@@ -1,11 +1,12 @@
 import sys
 from pathlib import Path
 from cleandns.argument_parser import ArgumentParser
+from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
 from cleandns.logger import Logger
 from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
 
-def process_file(file_path: Path, logger: Logger, config: dict[str, bool]) -> int:
+def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
     """
     Process a single DNS file. Returns 0 on success, 1 on failure.
     """
