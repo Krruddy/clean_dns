@@ -1,8 +1,9 @@
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+from cleandns.argument_parser import ParsedArgs
 from cleandns.config import DNSConfig
-from cleandns.main import process_file
+from cleandns.main import process_file, add_from_yaml
 from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
 from cleandns.logger import Logger
 
@@ -19,7 +20,18 @@ def config():
     return DNSConfig()
 
 
-# --- process_file return codes ---
+def _parsed_args(config=None, files=None, add_from=None):
+    """Build a ParsedArgs for use in main() tests."""
+    return ParsedArgs(
+        config=config or DNSConfig(),
+        files=files or [],
+        add_from=add_from,
+    )
+
+
+# ---------------------------------------------------------------------------
+# process_file — return codes
+# ---------------------------------------------------------------------------
 
 def test_process_file_returns_0_on_success(tmp_path, forward_sample_zone_content, config, logger):
     p = tmp_path / "example.com.zone"
@@ -74,18 +86,73 @@ def test_process_file_returns_1_on_os_error(tmp_path, forward_sample_zone_conten
         assert process_file(p, logger, config) == 1
 
 
-# --- main() aggregation ---
+# ---------------------------------------------------------------------------
+# add_from_yaml — return codes
+# ---------------------------------------------------------------------------
+
+def test_add_from_yaml_returns_0_on_success(tmp_path, forward_sample_zone_content, config, logger):
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: newhost\n"
+        "    ttl: 3600\n"
+        "    rdata: 10.99.99.99\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}):
+        assert add_from_yaml(yaml_file, logger, config) == 0
+
+
+def test_add_from_yaml_returns_1_when_named_checkconf_fails(tmp_path, config, logger):
+    from cleandns.exceptions import NamedConfNotFoundError
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.write_text("example.com: []\n", encoding=ZONE_FILE_ENCODING)
+
+    with patch("cleandns.main.NamedConfParser.from_system", side_effect=NamedConfNotFoundError("not found")):
+        assert add_from_yaml(yaml_file, logger, config) == 1
+
+
+def test_add_from_yaml_returns_1_for_invalid_yaml(tmp_path, config, logger):
+    yaml_file = tmp_path / "bad.yaml"
+    yaml_file.write_text("key: [unclosed", encoding=ZONE_FILE_ENCODING)
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={}):
+        assert add_from_yaml(yaml_file, logger, config) == 1
+
+
+def test_add_from_yaml_returns_1_for_unknown_zone(tmp_path, config, logger):
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.write_text(
+        "unknown.zone:\n"
+        "  - type: A\n"
+        "    name: host\n"
+        "    ttl: 3600\n"
+        "    rdata: 1.2.3.4\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={}):
+        assert add_from_yaml(yaml_file, logger, config) == 1
+
+
+# ---------------------------------------------------------------------------
+# main() — mode routing and exit code aggregation
+# ---------------------------------------------------------------------------
 
 def test_main_returns_1_when_any_file_fails(tmp_path, forward_sample_zone_content):
     good = tmp_path / "good.zone"
     good.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
     bad = tmp_path / "missing.zone"
 
-    with patch("cleandns.main.ArgumentParser") as mock_parser_cls:
-        mock_parser = MagicMock()
-        mock_parser.parse_arguments.return_value = (DNSConfig(), [str(good), str(bad)])
-        mock_parser_cls.return_value = mock_parser
-
+    with patch("cleandns.main.ArgumentParser") as mock_cls:
+        mock_cls.return_value.parse_arguments.return_value = _parsed_args(
+            files=[str(good), str(bad)]
+        )
         from cleandns.main import main
         assert main() == 1
 
@@ -94,20 +161,26 @@ def test_main_returns_0_when_all_files_succeed(tmp_path, forward_sample_zone_con
     p = tmp_path / "good.zone"
     p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
 
-    with patch("cleandns.main.ArgumentParser") as mock_parser_cls:
-        mock_parser = MagicMock()
-        mock_parser.parse_arguments.return_value = (DNSConfig(), [str(p)])
-        mock_parser_cls.return_value = mock_parser
-
+    with patch("cleandns.main.ArgumentParser") as mock_cls:
+        mock_cls.return_value.parse_arguments.return_value = _parsed_args(files=[str(p)])
         from cleandns.main import main
         assert main() == 0
 
 
 def test_main_returns_0_for_no_files():
-    with patch("cleandns.main.ArgumentParser") as mock_parser_cls:
-        mock_parser = MagicMock()
-        mock_parser.parse_arguments.return_value = (DNSConfig(), [])
-        mock_parser_cls.return_value = mock_parser
-
+    with patch("cleandns.main.ArgumentParser") as mock_cls:
+        mock_cls.return_value.parse_arguments.return_value = _parsed_args()
         from cleandns.main import main
         assert main() == 0
+
+
+def test_main_routes_to_add_from_yaml(tmp_path):
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.touch()
+
+    with patch("cleandns.main.ArgumentParser") as mock_cls, \
+         patch("cleandns.main.add_from_yaml", return_value=0) as mock_add:
+        mock_cls.return_value.parse_arguments.return_value = _parsed_args(add_from=yaml_file)
+        from cleandns.main import main
+        assert main() == 0
+        mock_add.assert_called_once()

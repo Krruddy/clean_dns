@@ -4,7 +4,13 @@ from cleandns.argument_parser import ArgumentParser
 from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
 from cleandns.logger import Logger
-from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
+from cleandns.named_conf_parser import NamedConfParser
+from cleandns.yaml_record_loader import YAMLRecordLoader
+from cleandns.exceptions import (
+    InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError,
+    NamedConfError, InvalidYAMLError, ZoneNotFoundError,
+)
+
 
 def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
     """
@@ -41,24 +47,84 @@ def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
         return 1
 
 
+def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
+    """
+    Add records from a YAML file to the appropriate zone files discovered
+    via named-checkconf -p. Returns 0 on success, 1 on failure.
+    """
+    try:
+        zone_map = NamedConfParser.from_system()
+    except NamedConfError as e:
+        logger.error(f"Could not read BIND9 configuration: {e}")
+        return 1
+
+    try:
+        records_by_zone = YAMLRecordLoader.load(yaml_path)
+    except InvalidYAMLError as e:
+        logger.error(f"Could not load YAML file: {e}")
+        return 1
+
+    # Validate all zones are known before touching any file.
+    unknown = [z for z in records_by_zone if z not in zone_map]
+    if unknown:
+        logger.error(
+            f"The following zones were not found in named-checkconf output: "
+            f"{', '.join(unknown)}"
+        )
+        return 1
+
+    failed_zones: list[str] = []
+
+    for zone_name, records in records_by_zone.items():
+        file_path = zone_map[zone_name]
+        try:
+            dns_file = DNSFile(file_path, config)
+            for record in records:
+                dns_file.add_record(record)
+            dns_file.remove_duplicates()
+            dns_file.sort()
+            dns_file.save()
+            logger.info(f"Successfully updated {file_path.name} ({zone_name})")
+        except FileNotFoundError as e:
+            logger.error(f"File not found: '{file_path}'\n{e}")
+            failed_zones.append(zone_name)
+        except PermissionError as e:
+            logger.error(f"Permission denied: '{file_path}'\n{e}")
+            failed_zones.append(zone_name)
+        except OSError as e:
+            logger.error(f"OS error while processing '{file_path}'\n{e}")
+            failed_zones.append(zone_name)
+        except InvalidZoneFileError as e:
+            logger.error(f"Invalid zone file '{file_path}': {e}")
+            failed_zones.append(zone_name)
+
+    if failed_zones:
+        logger.error(f"Failed to update: {', '.join(failed_zones)}")
+        return 1
+
+    return 0
+
+
 def main():
     # Initialize the singleton logger (configuration is handled inside the class)
     logger = Logger()
 
     arg_parser = ArgumentParser()
-    config, file_list = arg_parser.parse_arguments()
+    parsed = arg_parser.parse_arguments()
 
-    if not file_list:
+    if parsed.add_from is not None:
+        return add_from_yaml(parsed.add_from, logger, parsed.config)
+
+    if not parsed.files:
         logger.warning("No files provided to process. Use --help for more information.")
         return 0
 
-    files_to_process = [Path(f) for f in file_list]
-
-    failed_files = []
+    files_to_process = [Path(f) for f in parsed.files]
+    failed_files: list[str] = []
 
     # Process files sequentially
     for file_path in files_to_process:
-        if process_file(file_path, logger, config) != 0:
+        if process_file(file_path, logger, parsed.config) != 0:
             failed_files.append(file_path.name)
 
     if failed_files:
