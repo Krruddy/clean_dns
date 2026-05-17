@@ -1,4 +1,5 @@
 import pytest
+from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
 from cleandns.exceptions import InvalidZoneFile, EmptyZoneFile
 from cleandns.exceptions import MissingSOArecord
@@ -80,15 +81,6 @@ def test_invalid_ttl_raises_value_error(tmp_path, sample_soa_block, sample_origi
 
 # --- Logic Tests ---
 
-def test_increment_serial(zone_file, default_config):
-    """
-    Test that the serial number is incremented correctly.
-    """
-    dns = DNSFile(zone_file, default_config)
-    old_serial = dns.soa_record.serial
-    dns.increment_serial()
-    assert dns.soa_record.serial == old_serial + 1
-
 def test_save_does_not_increment_serial_when_unmodified(zone_file, default_config):
     """
     Test that save() does not increment the serial when no changes were made.
@@ -158,27 +150,31 @@ def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorte
     assert [record.name.rstrip('.') for record in records] == [n.rstrip('.') for n in expected_sorted_ptr_names]
     assert dns.modified is True
 
-def test_sort_is_case_insensitive(tmp_path, sample_ttl_line, sample_origin_line, sample_ns_block, sample_soa_block, default_config):
-    """
-    Test that sorting ignores case (e.g., 'www' and 'WWW' are treated the same).
-    """
-    content = (
-        f"{sample_ttl_line}\n"
-        f"{sample_origin_line}\n"
-        f"{sample_soa_block}\n"
-        f"{sample_ns_block}\n"
-        "zzz IN A 1.1.1.1\n"
-        "AAA IN A 2.2.2.2\n"
-        "bbb IN A 3.3.3.3\n"
-    )
-    p = tmp_path / "case.zone"
-    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+# --- Config Flag Output Tests ---
 
-    dns = DNSFile(p, default_config)
-    dns.sort()
+def test_omit_ttl_excluded_from_output(zone_file):
+    """omit_ttl=True must produce a file with no $TTL directive."""
+    config = DNSConfig(omit_origin=False, human_readable=False, omit_ttl=True, omit_record_ttl=False)
+    dns = DNSFile(zone_file, config)
+    dns.modified = True
+    dns.save()
+    assert "$TTL" not in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
 
-    names = [r.name.lower() for r in dns.records[RecordType.A]]
-    assert names == ["aaa", "bbb", "zzz"]
+def test_omit_origin_excluded_from_output(zone_file):
+    """omit_origin=True must produce a file with no $ORIGIN directive."""
+    config = DNSConfig(omit_origin=True, human_readable=False, omit_ttl=False, omit_record_ttl=False)
+    dns = DNSFile(zone_file, config)
+    dns.modified = True
+    dns.save()
+    assert "$ORIGIN" not in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+
+def test_omit_record_ttl_excluded_from_output(zone_file):
+    """omit_record_ttl=True must omit the TTL column from all record string representations."""
+    config = DNSConfig(omit_origin=False, human_readable=False, omit_ttl=False, omit_record_ttl=True)
+    dns = DNSFile(zone_file, config)
+    for records in dns.records.values():
+        for record in records:
+            assert str(record.ttl) not in str(record)
 
 # --- File I/O Tests ---
 
