@@ -25,7 +25,7 @@ class LoggerMeta(type):
 class Logger(metaclass=LoggerMeta):
     def __init__(self):
         # Create a logger
-        self.logger: logging.Logger = logging.getLogger("my_logger")
+        self.logger: logging.Logger = logging.getLogger("cleandns")
 
         # Create a StreamHandler and set the custom formatter
         handler = logging.StreamHandler()
