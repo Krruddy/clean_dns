@@ -181,6 +181,50 @@ def test_sort_ptr_records(tmp_path, complex_reverse_zone_content, expected_sorte
     assert [record.name.rstrip('.') for record in records] == [n.rstrip('.') for n in expected_sorted_ptr_names]
     assert dns.modified is True
 
+# --- add_record Tests ---
+
+def test_add_record_increases_count_and_sets_modified(zone_file, default_config):
+    dns = DNSFile(zone_file, default_config)
+    initial_count = len(dns.records[RecordType.A])
+    assert dns.modified is False
+
+    from cleandns.record_types import ARecord, DNSClass
+    new_record = ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.99", omit_ttl=False)
+    dns.add_record(new_record)
+
+    assert len(dns.records[RecordType.A]) == initial_count + 1
+    assert dns.modified is True
+
+
+def test_add_record_aligns_omit_ttl_with_config(zone_file):
+    config = DNSConfig(omit_record_ttl=True)
+    dns = DNSFile(zone_file, config)
+
+    from cleandns.record_types import ARecord, DNSClass
+    record = ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.99", omit_ttl=False)
+    dns.add_record(record)
+
+    assert record.omit_ttl is True
+
+
+def test_add_duplicate_record_is_removed_by_remove_duplicates(zone_file, default_config):
+    """add_record followed by remove_duplicates must be idempotent."""
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    initial_count = len(dns.records[RecordType.A])
+
+    from cleandns.record_types import ARecord, DNSClass
+    duplicate = ARecord(
+        name=existing.name, ttl=existing.ttl, class_=DNSClass.IN,
+        type=RecordType.A, rdata=existing.rdata, omit_ttl=False,
+    )
+    dns.add_record(duplicate)
+    assert len(dns.records[RecordType.A]) == initial_count + 1
+
+    dns.remove_duplicates()
+    assert len(dns.records[RecordType.A]) == initial_count
+
+
 # --- Config Flag Output Tests ---
 
 @pytest.mark.parametrize("flag,directive", [

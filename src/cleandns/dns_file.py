@@ -130,6 +130,15 @@ class DNSFile:
         if self.soa_record is not None:
             self.soa_record.increment_serial()
 
+    def add_record(self, record: AbstractRecord) -> None:
+        """
+        Append *record* to the zone, aligning its omit_ttl flag with the
+        file's config. Duplicate removal is handled by remove_duplicates().
+        """
+        record.omit_ttl = self.config.omit_record_ttl
+        self.records[record.type].append(record)
+        self.modified = True
+
     def remove_duplicates(self):
         """
         Removes duplicate records from the DNS file. 
