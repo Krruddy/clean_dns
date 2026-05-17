@@ -53,13 +53,13 @@ class SOARecord(AbstractRecord):
     """
     Represents a Start of Authority (SOA) DNS record, which contains administrative information about the zone.
     """
-    mname: str 
-    rname: str 
+    mname: str
+    rname: str
     serial: int
-    refresh: int | str
-    retry: int | str
-    expire: int | str
-    minimum: int | str
+    refresh: int
+    retry: int
+    expire: int
+    minimum: int
     human_readable: bool = field(default=False, compare=False)
 
     @override
