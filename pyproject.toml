@@ -1,7 +1,7 @@
 [project]
 name = "clean_dns"
 version = "0.1.0"
-description = ""
+description = "The purpose of this project is to use Python to manage Domain Name System (DNS) zone files."
 readme = "README.md"
 dependencies = [
     "dnspython",
