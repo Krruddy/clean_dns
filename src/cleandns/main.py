@@ -61,11 +61,10 @@ def main():
     # Process files sequentially
     for file_path in files_to_process:
         if process_file(file_path, logger, config) != 0:
-            failed_files.append(file_path.name) 
-            logger.error(f"Failed to process {file_path.name}")
+            failed_files.append(file_path.name)
 
     if failed_files:
-        logger.error(f"Failed to process the following files: {', '.join(failed_files)}")
+        logger.error(f"Failed to process: {', '.join(failed_files)}")
         return 1
 
     return 0
