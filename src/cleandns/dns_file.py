@@ -95,7 +95,6 @@ class DNSFile:
                             type=enum_type,
                             rdata=rdata.to_text(),
                             omit_ttl=self.config.omit_record_ttl,
-                            comment=None
                         )
                         self.records[enum_type].append(current_record)
 
@@ -105,7 +104,6 @@ class DNSFile:
                                                    class_=DNSClass(dns.rdataclass.to_text(rdataset.rdclass)),
                                                    type=RecordType.SOA,
                                                    rdata=rdata.to_text(),
-                                                   comment=None,
                                                    mname=rdata.mname.to_text(),
                                                    rname=rdata.rname.to_text(),
                                                    serial=rdata.serial,

@@ -7,20 +7,20 @@ from cleandns.record_types import ARecord, PTRRecord, SOARecord, RecordType, DNS
 def make_a_record(name="www", rdata="192.168.1.1", ttl=3600, omit_ttl=False) -> ARecord:
     return ARecord(
         name=name, ttl=ttl, class_=DNSClass.IN, type=RecordType.A,
-        rdata=rdata, comment=None, omit_ttl=omit_ttl,
+        rdata=rdata, omit_ttl=omit_ttl,
     )
 
 def make_ptr_record(name, rdata="host.example.com.", ttl=3600, omit_ttl=False) -> PTRRecord:
     return PTRRecord(
         name=name, ttl=ttl, class_=DNSClass.IN, type=RecordType.PTR,
-        rdata=rdata, comment=None, omit_ttl=omit_ttl,
+        rdata=rdata, omit_ttl=omit_ttl,
     )
 
 def make_soa_record(human_readable=False, refresh=3600, retry=1800, expire=604800, minimum=86400, ttl=3600, omit_ttl=False) -> SOARecord:
     return SOARecord(
         name="@", ttl=ttl, class_=DNSClass.IN, type=RecordType.SOA,
         rdata="ns1.example.com. admin.example.com. 2023101001 3600 1800 604800 86400",
-        comment=None, omit_ttl=omit_ttl,
+        omit_ttl=omit_ttl,
         mname="ns1.example.com.", rname="admin.example.com.",
         serial=2023101001, refresh=refresh, retry=retry, expire=expire, minimum=minimum,
         human_readable=human_readable,

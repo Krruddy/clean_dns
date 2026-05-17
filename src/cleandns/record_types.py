@@ -23,7 +23,6 @@ class AbstractRecord(ABC):
     ttl: int
     type: RecordType
     rdata: str
-    comment: str | None = field(compare=False)
     class_: DNSClass
     omit_ttl: bool = field(compare=False)
 
