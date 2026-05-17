@@ -56,6 +56,5 @@ class CustomFormatter(logging.Formatter):
 
     @override
     def format(self, record: logging.LogRecord) -> str:
-        log_format = self.FORMATS.get(record.levelno, self._style._fmt)
-        self._style._fmt = log_format
-        return super().format(record)
+        formatter = logging.Formatter(self.FORMATS.get(record.levelno, "%(message)s"))
+        return formatter.format(record)
