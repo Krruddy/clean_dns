@@ -89,6 +89,18 @@ def test_increment_serial(zone_file, default_config):
     dns.increment_serial()
     assert dns.soa_record.serial == old_serial + 1
 
+def test_save_does_not_increment_serial_when_unmodified(zone_file, default_config):
+    """
+    Test that save() does not increment the serial when no changes were made.
+    """
+    dns = DNSFile(zone_file, default_config)
+    original_serial = dns.soa_record.serial
+    assert dns.modified is False
+
+    dns.save()
+
+    assert dns.soa_record.serial == original_serial
+
 def test_remove_duplicates(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block, default_config):
     """
     Test that duplicate records are removed and modified flag is set.
