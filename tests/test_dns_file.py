@@ -153,6 +153,26 @@ def test_omit_record_ttl_excluded_from_output(zone_file):
         for record in records:
             assert str(record.ttl) not in str(record)
 
+# --- Integration Tests ---
+
+def test_full_pipeline_round_trip(tmp_path, complex_forward_zone_content, expected_sorted_a_names, default_config):
+    """Full pipeline: load → remove_duplicates → sort → save → reload must produce a valid, sorted, serial-bumped zone."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    # Run the pipeline
+    dns = DNSFile(p, default_config)
+    original_serial = dns.soa_record.serial
+    dns.remove_duplicates()
+    dns.sort()
+    dns.save()
+
+    # Reload from disk — verifies the saved file is a valid, parseable zone
+    reloaded = DNSFile(p, default_config)
+
+    assert reloaded.soa_record.serial == original_serial + 1
+    assert [r.name.rstrip(".") for r in reloaded.records[RecordType.A]] == [n.rstrip(".") for n in expected_sorted_a_names]
+
 # --- File I/O Tests ---
 
 def test_save_creates_backup_and_updates_file(zone_file, default_config):
