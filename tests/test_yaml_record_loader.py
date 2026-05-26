@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from cleandns.yaml_record_loader import YAMLRecordLoader
+from cleandns.yaml_record_loader import YAMLRecordLoader, StandardFormat, DNSEntriesFormat
 from cleandns.record_types import RecordType, ARecord, AAAARecord, CNAMERecord, MXRecord, PTRRecord, TXTRecord
 from cleandns.exceptions import InvalidYAMLError, UnknownRecordTypeError
 
@@ -128,7 +128,7 @@ def test_load_raises_on_malformed_yaml(tmp_path):
 
 def test_load_raises_when_top_level_is_not_dict(tmp_path):
     p = write_yaml(tmp_path, "- a\n- b\n")
-    with pytest.raises(InvalidYAMLError, match="top-level structure"):
+    with pytest.raises(InvalidYAMLError, match="unrecognised YAML structure"):
         YAMLRecordLoader.load(p)
 
 
@@ -215,4 +215,141 @@ example.com:
     rdata: 10.0.0.1
 """)
     with pytest.raises(InvalidYAMLError, match="ttl"):
+        YAMLRecordLoader.load(p)
+
+
+# ---------------------------------------------------------------------------
+# Format auto-detection — can_parse() unit tests
+# ---------------------------------------------------------------------------
+
+def test_dns_entries_format_can_parse_dns_entries_document():
+    assert DNSEntriesFormat.can_parse({"dnsEntries": []}) is True
+
+def test_dns_entries_format_rejects_standard_document():
+    assert DNSEntriesFormat.can_parse({"example.com": []}) is False
+
+def test_dns_entries_format_rejects_non_dict():
+    assert DNSEntriesFormat.can_parse([{"dnsEntries": []}]) is False
+
+def test_standard_format_can_parse_any_dict():
+    assert StandardFormat.can_parse({"example.com": []}) is True
+
+def test_standard_format_rejects_non_dict():
+    assert StandardFormat.can_parse(["a", "b"]) is False
+
+
+# ---------------------------------------------------------------------------
+# DNSEntriesFormat — valid input
+# ---------------------------------------------------------------------------
+
+def test_dns_entries_load_single_entry(tmp_path):
+    """A single dnsEntries entry must produce one ARecord in the correct zone."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.10.100.123
+    fqdn: host3.example.com
+""")
+    result = YAMLRecordLoader.load(p)
+    assert list(result.keys()) == ["example.com"]
+    record = result["example.com"][0]
+    assert isinstance(record, ARecord)
+    assert record.name == "host3"
+    assert record.rdata == "10.10.100.123"
+
+
+def test_dns_entries_load_multiple_entries_same_zone(tmp_path):
+    """Multiple entries with the same domain suffix land in the same zone."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.10.100.123
+    fqdn: host3.example.com
+  - ip: 10.10.100.124
+    fqdn: host4.example.com
+""")
+    result = YAMLRecordLoader.load(p)
+    assert len(result) == 1
+    assert len(result["example.com"]) == 2
+    assert {r.name for r in result["example.com"]} == {"host3", "host4"}
+
+
+def test_dns_entries_load_entries_across_zones(tmp_path):
+    """Entries with different domain suffixes are grouped into separate zones."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: host1.example.com
+  - ip: 10.0.0.2
+    fqdn: host2.other.net
+""")
+    result = YAMLRecordLoader.load(p)
+    assert set(result.keys()) == {"example.com", "other.net"}
+    assert result["example.com"][0].name == "host1"
+    assert result["other.net"][0].name == "host2"
+
+
+def test_dns_entries_multi_label_hostname(tmp_path):
+    """Only the first label is the hostname; the rest is the zone."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: web.sub.example.com
+""")
+    result = YAMLRecordLoader.load(p)
+    assert "sub.example.com" in result
+    assert result["sub.example.com"][0].name == "web"
+
+
+def test_dns_entries_uses_default_ttl(tmp_path):
+    """Records created from dnsEntries must use the supplied default_ttl."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: host1.example.com
+""")
+    result = YAMLRecordLoader.load(p, default_ttl=7200)
+    assert result["example.com"][0].ttl == 7200
+
+
+# ---------------------------------------------------------------------------
+# DNSEntriesFormat — invalid input
+# ---------------------------------------------------------------------------
+
+def test_dns_entries_raises_on_missing_ip(tmp_path):
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - fqdn: host1.example.com
+""")
+    with pytest.raises(InvalidYAMLError, match="'ip'"):
+        YAMLRecordLoader.load(p)
+
+
+def test_dns_entries_raises_on_missing_fqdn(tmp_path):
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+""")
+    with pytest.raises(InvalidYAMLError, match="'fqdn'"):
+        YAMLRecordLoader.load(p)
+
+
+def test_dns_entries_raises_on_single_label_fqdn(tmp_path):
+    """An FQDN with only one label cannot yield a zone name."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: justahostname
+""")
+    with pytest.raises(InvalidYAMLError, match="zone"):
+        YAMLRecordLoader.load(p)
+
+
+def test_dns_entries_raises_when_list_is_not_a_list(tmp_path):
+    p = write_yaml(tmp_path, "dnsEntries: not-a-list\n")
+    with pytest.raises(InvalidYAMLError, match="must be a list"):
+        YAMLRecordLoader.load(p)
+
+
+def test_dns_entries_raises_when_entry_is_not_a_mapping(tmp_path):
+    p = write_yaml(tmp_path, "dnsEntries:\n  - just-a-string\n")
+    with pytest.raises(InvalidYAMLError, match="must be a mapping"):
         YAMLRecordLoader.load(p)

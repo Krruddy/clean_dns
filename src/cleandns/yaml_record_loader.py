@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 import yaml
@@ -22,26 +23,170 @@ _RECORD_TYPES: dict[str, tuple[type[AbstractRecord], RecordType]] = {
 }
 
 
-class YAMLRecordLoader:
+class YAMLFormat(ABC):
     """
-    Loads DNS records from a YAML file.
+    Abstract base class for YAML input-format handlers.
 
-    Expected format:
+    Each concrete subclass is responsible for:
+      - declaring whether it can handle a given parsed YAML document (can_parse)
+      - converting that document into a zone-name → record-list mapping (parse)
+
+    To support a new YAML structure, subclass YAMLFormat, implement both
+    methods, and insert the class into _FORMATS before the StandardFormat
+    fallback.
+    """
+
+    @classmethod
+    @abstractmethod
+    def can_parse(cls, data: object) -> bool:
+        """Return True if *data* matches this format's expected top-level structure."""
+        ...
+
+    @classmethod
+    @abstractmethod
+    def parse(
+        cls,
+        data: object,
+        filename: str,
+        default_ttl: int,
+    ) -> dict[str, list[AbstractRecord]]:
+        """
+        Parse *data* and return a mapping of zone name to the list of records
+        to add to that zone.  Raise InvalidYAMLError on any validation failure.
+        """
+        ...
+
+
+class StandardFormat(YAMLFormat):
+    """
+    Zone-keyed format — the default/canonical format for this tool:
+
         zone-name:
           - type: A
             name: host
             rdata: 192.168.1.1
-            ttl: 3600          # optional; defaults to the zone file's $TTL
+            ttl: 3600   # optional; defaults to the zone file's $TTL
+    """
+
+    @classmethod
+    def can_parse(cls, data: object) -> bool:
+        # Acts as the fallback: any top-level mapping that is not claimed by a
+        # more specific format is treated as StandardFormat.
+        return isinstance(data, dict)
+
+    @classmethod
+    def parse(
+        cls,
+        data: object,
+        filename: str,
+        default_ttl: int,
+    ) -> dict[str, list[AbstractRecord]]:
+        if not isinstance(data, dict):
+            raise InvalidYAMLError(
+                f"'{filename}': top-level structure must be a mapping of zone names to record lists."
+            )
+
+        result: dict[str, list[AbstractRecord]] = {}
+        for zone_name, record_list in data.items():
+            if not isinstance(record_list, list):
+                raise InvalidYAMLError(
+                    f"'{filename}': records for zone '{zone_name}' must be a list."
+                )
+            result[str(zone_name)] = [
+                _build_record(entry, filename, str(zone_name), default_ttl)
+                for entry in record_list
+            ]
+        return result
+
+
+class DNSEntriesFormat(YAMLFormat):
+    """
+    IP/FQDN shorthand format (A records only):
+
+        dnsEntries:
+          - ip: 10.10.100.123
+            fqdn: host3.example.com
+          - ip: 10.10.100.124
+            fqdn: host4.example.com
+
+    The zone is derived by stripping the first label from the FQDN:
+      host3.example.com   → zone 'example.com',     name 'host3'
+      web.sub.example.com → zone 'sub.example.com', name 'web'
+    """
+
+    @classmethod
+    def can_parse(cls, data: object) -> bool:
+        return isinstance(data, dict) and "dnsEntries" in data
+
+    @classmethod
+    def parse(
+        cls,
+        data: object,
+        filename: str,
+        default_ttl: int,
+    ) -> dict[str, list[AbstractRecord]]:
+        if not isinstance(data, dict) or not isinstance(data.get("dnsEntries"), list):
+            raise InvalidYAMLError(
+                f"'{filename}': 'dnsEntries' must be a list."
+            )
+
+        result: dict[str, list[AbstractRecord]] = {}
+
+        for entry in data["dnsEntries"]:
+            if not isinstance(entry, dict):
+                raise InvalidYAMLError(
+                    f"'{filename}': each entry in 'dnsEntries' must be a mapping."
+                )
+
+            ip = entry.get("ip")
+            fqdn_raw = entry.get("fqdn")
+
+            if ip is None:
+                raise InvalidYAMLError(
+                    f"'{filename}': missing required field 'ip' in dnsEntries entry."
+                )
+            if fqdn_raw is None:
+                raise InvalidYAMLError(
+                    f"'{filename}': missing required field 'fqdn' in dnsEntries entry."
+                )
+
+            name, zone = _split_fqdn(str(fqdn_raw), filename)
+
+            record = ARecord(
+                name=name,
+                ttl=default_ttl,
+                class_=DNSClass.IN,
+                type=RecordType.A,
+                rdata=str(ip),
+                omit_ttl=False,
+            )
+            result.setdefault(zone, []).append(record)
+
+        return result
+
+
+# Formats are tried in declaration order; more specific formats must come
+# before the StandardFormat fallback.
+_FORMATS: list[type[YAMLFormat]] = [DNSEntriesFormat, StandardFormat]
+
+
+class YAMLRecordLoader:
+    """
+    Loads DNS records from a YAML file, auto-detecting the format.
+
+    Supported formats (tried in declaration order, most specific first):
+      - DNSEntriesFormat — dnsEntries: [{ip, fqdn}, ...]
+      - StandardFormat   — zone-name: [{type, name, rdata, ttl?}, ...]
     """
 
     @staticmethod
     def load(path: Path, default_ttl: int = _DEFAULT_TTL) -> dict[str, list[AbstractRecord]]:
         """
         Parse the YAML file at *path* and return a mapping of zone name to
-        the list of records to add to that zone.
+        the list of records to add to that zone.  The format is auto-detected.
 
         *default_ttl* is used for any record that does not declare its own TTL.
-        Pass the zone file's TTL here so that omitted TTLs are consistent with
+        Pass the zone file's $TTL here so that omitted TTLs are consistent with
         the rest of the zone.
         """
         try:
@@ -52,24 +197,14 @@ class YAMLRecordLoader:
         except yaml.YAMLError as e:
             raise InvalidYAMLError(f"Could not parse YAML file '{path.name}': {e}") from e
 
-        if not isinstance(data, dict):
-            raise InvalidYAMLError(
-                f"'{path.name}': top-level structure must be a mapping of zone names to record lists."
-            )
+        for fmt in _FORMATS:
+            if fmt.can_parse(data):
+                return fmt.parse(data, path.name, default_ttl)
 
-        result: dict[str, list[AbstractRecord]] = {}
-
-        for zone_name, record_list in data.items():
-            if not isinstance(record_list, list):
-                raise InvalidYAMLError(
-                    f"'{path.name}': records for zone '{zone_name}' must be a list."
-                )
-            result[str(zone_name)] = [
-                _build_record(entry, path.name, str(zone_name), default_ttl)
-                for entry in record_list
-            ]
-
-        return result
+        raise InvalidYAMLError(
+            f"'{path.name}': unrecognised YAML structure. "
+            f"Supported formats: {', '.join(f.__name__ for f in _FORMATS)}."
+        )
 
 
 def _build_record(
@@ -116,3 +251,22 @@ def _build_record(
         rdata=str(rdata),
         omit_ttl=False,  # updated by DNSFile.add_record() to match config
     )
+
+
+def _split_fqdn(fqdn: str, filename: str) -> tuple[str, str]:
+    """
+    Split an FQDN into (hostname, zone).
+
+    Examples:
+        'host3.example.com'   → ('host3', 'example.com')
+        'web.sub.example.com' → ('web',   'sub.example.com')
+
+    Raises InvalidYAMLError if the FQDN cannot yield at least two labels.
+    """
+    labels = fqdn.rstrip('.').split('.', 1)
+    if len(labels) != 2 or not labels[0] or not labels[1]:
+        raise InvalidYAMLError(
+            f"'{filename}': cannot derive a zone from FQDN '{fqdn}': "
+            f"expected at least two dot-separated labels."
+        )
+    return labels[0], labels[1]
