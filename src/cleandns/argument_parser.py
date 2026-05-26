@@ -78,8 +78,28 @@ class ArgumentParser:
             ),
         )
 
+        backup_group = self.parser.add_mutually_exclusive_group()
+        _ = backup_group.add_argument(
+            "--backup-dir",
+            metavar="DIR",
+            type=str,
+            default=None,
+            help=(
+                "Directory where zone file backups are stored. "
+                "Defaults to a 'backups/' subdirectory next to each zone file."
+            ),
+        )
+        _ = backup_group.add_argument(
+            "--no-backup",
+            action="store_true",
+            default=False,
+            help="Disable backup creation. Use when backups are managed externally.",
+        )
+
     def parse_arguments(self, args: Sequence[str] | None = None) -> ParsedArgs:
         parsed_args = self.parser.parse_args(args)
+
+        backup_dir = Path(parsed_args.backup_dir) if parsed_args.backup_dir else None
 
         config = DNSConfig(
             omit_origin=parsed_args.omit_origin,
@@ -88,6 +108,8 @@ class ArgumentParser:
             omit_record_ttl=parsed_args.omit_record_ttl,
             dry_run=parsed_args.dry_run,
             reload=parsed_args.reload,
+            backup_dir=backup_dir,
+            no_backup=parsed_args.no_backup,
         )
 
         add_from = Path(parsed_args.add_from) if parsed_args.add_from else None

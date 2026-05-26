@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from pathlib import Path
+
 
 @dataclass(frozen=True)
 class DNSConfig:
@@ -9,3 +11,8 @@ class DNSConfig:
     omit_record_ttl: bool = False
     dry_run: bool = False
     reload: bool = False
+    # backup_dir: explicit directory for backups; None means use the default
+    #             ('backups/' subdirectory next to each zone file).
+    # no_backup:  skip backup creation entirely (for external backup workflows).
+    backup_dir: Path | None = None
+    no_backup: bool = False

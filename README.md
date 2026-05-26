@@ -83,12 +83,14 @@ confident the changes are correct.  Has no effect with `--dry-run`.
 | `--add-from YAML` | — | YAML file with records to add (mutually exclusive with `--files`) |
 | `--dry-run` | off | Show what would change without writing |
 | `--reload` | off | Run `rndc reload` after each successful write |
+| `--backup-dir DIR` | `backups/` next to each zone file | Directory where timestamped backups are stored |
+| `--no-backup` | off | Disable backup creation entirely |
 | `--omit-origin` | off | Do not write the `$ORIGIN` directive |
 | `--omit-ttl` | off | Do not write the `$TTL` directive |
 | `--omit-record-ttl` | off | Omit the per-record TTL column |
 | `--human-readable` | off | Format SOA timing fields as `1h30m` instead of raw seconds |
 
-`--omit-ttl` and `--omit-record-ttl` are mutually exclusive.
+Mutually exclusive pairs: `--omit-ttl` / `--omit-record-ttl`, `--backup-dir` / `--no-backup`.
 
 ## YAML formats
 
@@ -152,7 +154,7 @@ dnsEntries:
 |------------|---------|
 | **Comments are not preserved** | dnspython discards comments when parsing. Every file that is rewritten will lose any inline comments. |
 | **Unsupported record types block processing** | A zone file containing types not in the supported list (e.g. SRV, CAA, SSHFP) will be rejected entirely. |
-| **Backup files accumulate** | There is no automatic cleanup of timestamped backup files. |
+| **Backup files accumulate** | There is no automatic cleanup of timestamped backup files within the backup directory. |
 | **Default TTL mismatch on add** | When using `--add-from` and a record in the YAML omits its `ttl`, the fallback is 3600 — regardless of the zone file's own `$TTL` directive. |
 | **No serial overflow guard** | The SOA serial is incremented by 1 with no check for the 32-bit unsigned maximum (4 294 967 295). |
 

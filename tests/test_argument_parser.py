@@ -53,7 +53,7 @@ def test_config_flag_sets_attribute(flag, attr):
 
 
 def test_config_flags_default_to_false():
-    """All config flags must be False when not provided."""
+    """All boolean config flags must be False when not provided."""
     result = ArgumentParser().parse_arguments([])
     assert result.config.omit_origin is False
     assert result.config.human_readable is False
@@ -61,6 +61,13 @@ def test_config_flags_default_to_false():
     assert result.config.omit_record_ttl is False
     assert result.config.dry_run is False
     assert result.config.reload is False
+    assert result.config.no_backup is False
+
+
+def test_backup_dir_defaults_to_none():
+    """backup_dir must be None when --backup-dir is not provided."""
+    result = ArgumentParser().parse_arguments([])
+    assert result.config.backup_dir is None
 
 
 def test_omit_ttl_and_omit_record_ttl_are_mutually_exclusive():
@@ -87,3 +94,23 @@ def test_add_from_and_files_are_mutually_exclusive():
     """--add-from and -f cannot be used together."""
     with pytest.raises(SystemExit):
         ArgumentParser().parse_arguments(["-f", "zone.dns", "--add-from", "records.yaml"])
+
+
+# --- --backup-dir / --no-backup tests ---
+
+def test_backup_dir_flag_sets_path(tmp_path):
+    """--backup-dir must set config.backup_dir to the given Path."""
+    result = ArgumentParser().parse_arguments(["--backup-dir", str(tmp_path)])
+    assert result.config.backup_dir == tmp_path
+
+
+def test_no_backup_flag_sets_no_backup():
+    """--no-backup must set config.no_backup to True."""
+    result = ArgumentParser().parse_arguments(["--no-backup"])
+    assert result.config.no_backup is True
+
+
+def test_backup_dir_and_no_backup_are_mutually_exclusive():
+    """--backup-dir and --no-backup cannot be used together."""
+    with pytest.raises(SystemExit):
+        ArgumentParser().parse_arguments(["--backup-dir", "/tmp/bak", "--no-backup"])

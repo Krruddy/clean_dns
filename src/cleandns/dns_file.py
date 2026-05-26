@@ -268,22 +268,25 @@ class DNSFile:
             self.__tmp_path.unlink(missing_ok=True)
             raise
 
-    def _replace_file(self):
+    def _replace_file(self, backup_dir: Path | None) -> None:
         """
-        Replaces the original DNS file with the newly reconstructed temporary file,
-        while creating a backup of the original file with a timestamped name.
+        Replaces the original DNS file with the newly reconstructed temporary file.
+
+        If *backup_dir* is provided, a timestamped copy of the original is saved
+        there before the replacement.  File permissions are always copied from the
+        original to the new file regardless of whether a backup is made.
         """
-
-        current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
-        backup_path = self.path.with_name(f"{self.path.name}.{current_date}")
-
         if self.path.exists():
-            # Create a backup copy (preserves metadata and keeps original safe until the very end)
-            _ = shutil.copy2(self.path, backup_path)
-            # Apply original file permissions to the new temp file
+            if backup_dir is not None:
+                current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
+                backup_path = backup_dir / f"{self.path.name}.{current_date}"
+                # Preserve metadata (timestamps, extended attributes) in the backup
+                shutil.copy2(self.path, backup_path)
+                self.logger.info(f"Backup saved to {backup_path}")
+            # Always apply original file permissions to the replacement file
             shutil.copymode(self.path, self.__tmp_path)
 
-        # Atomic replacement: Overwrites self.path with tmp_path in one operation
+        # Atomic replacement: overwrites self.path with tmp_path in one syscall
         os.replace(self.__tmp_path, self.path)
 
     def save(self) -> ZoneChanges:
@@ -302,9 +305,22 @@ class DNSFile:
         serial_after = (serial_before + 1) if (self.modified and serial_before is not None) else serial_before
 
         if self.modified and not self.config.dry_run:
+            # Resolve the backup directory and create it *before* touching any
+            # file.  An OSError here aborts the save cleanly with the zone file
+            # unchanged.
+            if self.config.no_backup:
+                backup_dir: Path | None = None
+            elif self.config.backup_dir is not None:
+                backup_dir = self.config.backup_dir
+            else:
+                backup_dir = self.path.parent / "backups"
+
+            if backup_dir is not None:
+                backup_dir.mkdir(parents=True, exist_ok=True)
+
             self.increment_serial()
             self._reconstruct_file()
-            self._replace_file()
+            self._replace_file(backup_dir)
 
         return ZoneChanges(
             records_added=tuple(self._records_added),

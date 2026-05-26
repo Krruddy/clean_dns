@@ -203,15 +203,14 @@ def test_process_file_dry_run_does_not_modify_file(tmp_path, forward_sample_zone
 
 
 def test_process_file_dry_run_creates_no_backup(tmp_path, forward_sample_zone_content, logger):
-    """With dry_run=True no backup file must be created."""
+    """With dry_run=True no backup file or backup directory must be created."""
     p = tmp_path / "example.com.zone"
     p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
     dry_config = DNSConfig(dry_run=True)
 
     process_file(p, logger, dry_config)
 
-    backups = [f for f in p.parent.iterdir() if f.name.startswith(p.name) and f != p]
-    assert len(backups) == 0
+    assert not (p.parent / "backups").exists()
 
 
 def test_add_from_yaml_dry_run_does_not_modify_zone_file(tmp_path, forward_sample_zone_content, logger):

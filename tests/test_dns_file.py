@@ -401,11 +401,12 @@ def test_save_creates_backup_and_updates_file(zone_file, default_config):
     new_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
     assert str(original_serial + 1) in new_content
 
-    # 2. Verify backup file was created
-    # Backup format is filename.YYYY-MM-DD_HH-MM-SS
-    # We look for any file starting with the original name but longer
-    backups = [f for f in zone_file.parent.iterdir() if f.name.startswith(zone_file.name) and f != zone_file]
-    assert len(backups) > 0
+    # 2. Verify backup was created in the default 'backups/' subdirectory
+    backup_dir = zone_file.parent / "backups"
+    assert backup_dir.is_dir()
+    backups = list(backup_dir.iterdir())
+    assert len(backups) == 1
+    assert backups[0].name.startswith(zone_file.name)
     # Verify backup content matches original state
     assert backups[0].read_text(encoding=ZONE_FILE_ENCODING) == original_content
 
@@ -510,14 +511,13 @@ def test_dry_run_does_not_write_file(zone_file):
 
 
 def test_dry_run_creates_no_backup(zone_file):
-    """With dry_run=True no backup file must be created."""
+    """With dry_run=True no backup file or backup directory must be created."""
     config = DNSConfig(dry_run=True)
     dns = DNSFile(zone_file, config)
     dns.add_record(ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.1", omit_ttl=False))
     dns.save()
 
-    backups = [f for f in zone_file.parent.iterdir() if f.name.startswith(zone_file.name) and f != zone_file]
-    assert len(backups) == 0
+    assert not (zone_file.parent / "backups").exists()
 
 
 def test_dry_run_still_returns_zone_changes_with_has_changes(zone_file):
@@ -543,3 +543,100 @@ def test_dry_run_does_not_increment_serial_in_memory(zone_file):
     dns.save()
 
     assert dns.soa_record.serial == original_serial
+
+
+# ---------------------------------------------------------------------------
+# Backup configuration
+# ---------------------------------------------------------------------------
+
+def test_backup_goes_to_backups_subdir_by_default(zone_file, default_config):
+    """Default backup location must be a 'backups/' subdirectory next to the zone file."""
+    dns = DNSFile(zone_file, default_config)
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.1.2.3", omit_ttl=False))
+    dns.save()
+
+    backup_dir = zone_file.parent / "backups"
+    assert backup_dir.is_dir()
+    backups = list(backup_dir.iterdir())
+    assert len(backups) == 1
+    assert backups[0].name.startswith(zone_file.name)
+
+
+def test_backup_dir_is_created_automatically(zone_file, default_config):
+    """save() must create the backup directory if it does not yet exist."""
+    backup_dir = zone_file.parent / "backups"
+    assert not backup_dir.exists()
+
+    dns = DNSFile(zone_file, default_config)
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.1.2.3", omit_ttl=False))
+    dns.save()
+
+    assert backup_dir.is_dir()
+
+
+def test_custom_backup_dir_is_used(tmp_path, zone_file, default_config):
+    """With backup_dir set, backups must go to the specified directory."""
+    custom_dir = tmp_path / "my_backups"
+    assert not custom_dir.exists()
+
+    config = DNSConfig(backup_dir=custom_dir)
+    dns = DNSFile(zone_file, config)
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.1.2.3", omit_ttl=False))
+    dns.save()
+
+    assert custom_dir.is_dir()
+    backups = list(custom_dir.iterdir())
+    assert len(backups) == 1
+    assert backups[0].name.startswith(zone_file.name)
+    # Default 'backups/' subdirectory must NOT have been created
+    assert not (zone_file.parent / "backups").exists()
+
+
+def test_no_backup_skips_backup_entirely(zone_file):
+    """With no_backup=True the zone file is updated but no backup is created."""
+    config = DNSConfig(no_backup=True)
+    dns = DNSFile(zone_file, config)
+    assert dns.soa_record is not None
+    original_serial = dns.soa_record.serial
+
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.1.2.3", omit_ttl=False))
+    dns.save()
+
+    # Zone file was updated
+    assert str(original_serial + 1) in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+    # No backup directory was created
+    assert not (zone_file.parent / "backups").exists()
+
+
+def test_no_backup_does_not_create_any_extra_files(zone_file):
+    """With no_backup=True, no files other than the zone file itself must appear."""
+    config = DNSConfig(no_backup=True)
+    files_before = set(zone_file.parent.iterdir())
+
+    dns = DNSFile(zone_file, config)
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.1.2.3", omit_ttl=False))
+    dns.save()
+
+    files_after = set(zone_file.parent.iterdir())
+    # Only the zone file itself should be present — no new files or directories
+    assert files_after == files_before
+
+
+def test_backup_dir_creation_failure_raises_before_write(zone_file):
+    """If the backup directory cannot be created, save() must raise OSError
+    before the zone file is modified."""
+    original_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+
+    # Place a regular file where the backup directory should be created —
+    # mkdir will raise NotADirectoryError (a subclass of OSError).
+    blocker = zone_file.parent / "backups"
+    blocker.write_text("I am a file, not a directory", encoding=ZONE_FILE_ENCODING)
+
+    dns = DNSFile(zone_file, default_config := DNSConfig())
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.1.2.3", omit_ttl=False))
+
+    with pytest.raises(OSError):
+        dns.save()
+
+    # The zone file must be completely unchanged
+    assert zone_file.read_text(encoding=ZONE_FILE_ENCODING) == original_content
