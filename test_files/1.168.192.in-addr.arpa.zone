@@ -1,0 +1,33 @@
+$TTL    3600
+$ORIGIN 1.168.192.in-addr.arpa.
+
+; -----------------------------------------------------------------------
+; Start of Authority
+; -----------------------------------------------------------------------
+@       IN  SOA     ns1.example.com. hostmaster.example.com. (
+                    2024060101  ; serial  (YYYYMMDDNN)
+                    3600        ; refresh (1 hour)
+                    1800        ; retry   (30 minutes)
+                    604800      ; expire  (1 week)
+                    86400 )     ; minimum (1 day)
+
+; -----------------------------------------------------------------------
+; Name servers
+; -----------------------------------------------------------------------
+@       IN  NS      ns1.example.com.
+@       IN  NS      ns2.example.com.
+
+; -----------------------------------------------------------------------
+; PTR records — intentionally out of numeric order
+; Maps the last octet of the 192.168.1.0/24 subnet back to hostnames.
+; -----------------------------------------------------------------------
+50      IN  PTR     ftp.example.com.
+10      IN  PTR     www.example.com.
+22      IN  PTR     mail3.example.com.
+1       IN  PTR     ns1.example.com.
+40      IN  PTR     api.example.com.
+30      IN  PTR     db.example.com.
+60      IN  PTR     app.example.com.
+2       IN  PTR     ns2.example.com.
+21      IN  PTR     mail2.example.com.
+20      IN  PTR     mail1.example.com.

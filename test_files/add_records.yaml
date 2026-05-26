@@ -1,0 +1,30 @@
+# Records to add with:
+#   cleandns --add-from test_files/add_records.yaml
+#
+# Requires a running BIND9 installation (named-checkconf is used to
+# locate the zone files automatically).  Run with --dry-run first to
+# preview changes before they are applied.
+
+example.com:
+  # New web-tier hosts
+  - type: A
+    name: monitor
+    ttl: 3600
+    rdata: 192.168.1.70
+
+  - type: A
+    name: backup
+    ttl: 3600
+    rdata: 192.168.1.80
+
+  # Alias for the monitoring dashboard
+  - type: CNAME
+    name: status
+    ttl: 3600
+    rdata: monitor.example.com.
+
+  # Second TXT record (e.g. domain ownership verification)
+  - type: TXT
+    name: "@"
+    ttl: 3600
+    rdata: '"google-site-verification=abc123def456xyz789"'
