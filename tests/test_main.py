@@ -1,6 +1,7 @@
+import subprocess
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, call
 from cleandns.argument_parser import ParsedArgs
 from cleandns.config import DNSConfig
 from cleandns.main import process_file, add_from_yaml
@@ -234,3 +235,147 @@ def test_add_from_yaml_dry_run_does_not_modify_zone_file(tmp_path, forward_sampl
         assert add_from_yaml(yaml_file, logger, dry_config) == 0
 
     assert zone_file.read_text(encoding=ZONE_FILE_ENCODING) == original
+
+
+# ---------------------------------------------------------------------------
+# --reload flag — rndc reload integration
+# ---------------------------------------------------------------------------
+
+def test_process_file_reload_calls_rndc_when_changes_applied(
+    tmp_path, complex_forward_zone_content, logger
+):
+    """With reload=True, rndc reload must be called after changes are written."""
+    # complex_forward_zone_content is unsorted, so sort() will produce changes.
+    p = tmp_path / "example.com.zone"
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
+    reload_config = DNSConfig(reload=True)
+
+    with patch("cleandns.main.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        result = process_file(p, logger, reload_config)
+
+    assert result == 0
+    # rndc reload should have been called with the zone origin (example.com)
+    mock_run.assert_called_once()
+    cmd = mock_run.call_args[0][0]
+    assert cmd[0] == "rndc"
+    assert cmd[1] == "reload"
+    assert "example.com" in cmd[2]
+
+
+def test_process_file_reload_not_called_when_no_changes(
+    tmp_path, forward_sample_zone_content, logger
+):
+    """With reload=True, rndc must NOT be called when the zone needed no changes."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    # First pass — bring the file into its final sorted, deduped form so the
+    # second pass genuinely has nothing to change.
+    process_file(p, logger, DNSConfig())
+
+    reload_config = DNSConfig(reload=True)
+    with patch("cleandns.main.subprocess.run") as mock_run:
+        result = process_file(p, logger, reload_config)
+
+    assert result == 0
+    mock_run.assert_not_called()
+
+
+def test_process_file_reload_not_called_when_dry_run(
+    tmp_path, complex_forward_zone_content, logger
+):
+    """--reload has no effect when combined with --dry-run."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
+    config = DNSConfig(dry_run=True, reload=True)
+
+    with patch("cleandns.main.subprocess.run") as mock_run:
+        result = process_file(p, logger, config)
+
+    assert result == 0
+    mock_run.assert_not_called()
+
+
+def test_process_file_reload_failure_returns_1(
+    tmp_path, complex_forward_zone_content, logger
+):
+    """If rndc reload exits with a non-zero status, process_file must return 1."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
+    reload_config = DNSConfig(reload=True)
+
+    with patch("cleandns.main.subprocess.run",
+               side_effect=subprocess.CalledProcessError(1, "rndc", stderr="zone not found")):
+        result = process_file(p, logger, reload_config)
+
+    assert result == 1
+
+
+def test_process_file_reload_rndc_not_found_returns_1(
+    tmp_path, complex_forward_zone_content, logger
+):
+    """If rndc is not on PATH, process_file must return 1."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
+    reload_config = DNSConfig(reload=True)
+
+    with patch("cleandns.main.subprocess.run", side_effect=FileNotFoundError):
+        result = process_file(p, logger, reload_config)
+
+    assert result == 1
+
+
+def test_add_from_yaml_reload_calls_rndc_after_write(
+    tmp_path, forward_sample_zone_content, logger
+):
+    """With reload=True, rndc reload must be called for each zone that was written."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: newhost\n"
+        "    ttl: 3600\n"
+        "    rdata: 10.99.99.99\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+    reload_config = DNSConfig(reload=True)
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}), \
+         patch("cleandns.main.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        result = add_from_yaml(yaml_file, logger, reload_config)
+
+    assert result == 0
+    mock_run.assert_called_once()
+    cmd = mock_run.call_args[0][0]
+    assert cmd == ["rndc", "reload", "example.com"]
+
+
+def test_add_from_yaml_reload_failure_returns_1(
+    tmp_path, forward_sample_zone_content, logger
+):
+    """If rndc reload fails during add_from_yaml, the function must return 1."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: newhost\n"
+        "    ttl: 3600\n"
+        "    rdata: 10.99.99.99\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+    reload_config = DNSConfig(reload=True)
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}), \
+         patch("cleandns.main.subprocess.run",
+               side_effect=subprocess.CalledProcessError(1, "rndc", stderr="permission denied")):
+        result = add_from_yaml(yaml_file, logger, reload_config)
+
+    assert result == 1

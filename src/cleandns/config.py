@@ -8,3 +8,4 @@ class DNSConfig:
     omit_ttl: bool = False
     omit_record_ttl: bool = False
     dry_run: bool = False
+    reload: bool = False

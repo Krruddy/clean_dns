@@ -67,6 +67,16 @@ class ArgumentParser:
                 "A change summary is always printed; this flag prevents the actual write."
             ),
         )
+        _ = self.parser.add_argument(
+            "--reload",
+            action="store_true",
+            default=False,
+            help=(
+                "Run 'rndc reload <zone>' after each zone file is successfully written. "
+                "BIND is NOT reloaded by default; use this flag only when you are "
+                "confident the changes are correct. Has no effect with --dry-run."
+            ),
+        )
 
     def parse_arguments(self, args: Sequence[str] | None = None) -> ParsedArgs:
         parsed_args = self.parser.parse_args(args)
@@ -77,6 +87,7 @@ class ArgumentParser:
             omit_ttl=parsed_args.omit_ttl,
             omit_record_ttl=parsed_args.omit_record_ttl,
             dry_run=parsed_args.dry_run,
+            reload=parsed_args.reload,
         )
 
         add_from = Path(parsed_args.add_from) if parsed_args.add_from else None

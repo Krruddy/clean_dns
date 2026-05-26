@@ -1,3 +1,4 @@
+import subprocess
 import sys
 from pathlib import Path
 from cleandns.argument_parser import ArgumentParser
@@ -10,6 +11,31 @@ from cleandns.exceptions import (
     InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError,
     NamedConfError, InvalidYAMLError, ZoneNotFoundError,
 )
+
+
+def _rndc_reload(zone_name: str | None, logger: Logger) -> bool:
+    """
+    Run `rndc reload [zone_name]`. Returns True on success, False on failure.
+    When zone_name is None, reloads all zones.
+    """
+    cmd = ["rndc", "reload"]
+    if zone_name:
+        cmd.append(zone_name)
+    label = zone_name or "all zones"
+
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        logger.info(f"rndc reload succeeded for {label}")
+        return True
+    except FileNotFoundError:
+        logger.error("rndc not found — is BIND9 installed and on PATH?")
+        return False
+    except subprocess.CalledProcessError as e:
+        logger.error(f"rndc reload failed for {label}: {e.stderr.strip()}")
+        return False
+    except OSError as e:
+        logger.error(f"Could not run rndc: {e}")
+        return False
 
 
 def _log_changes(changes: ZoneChanges, logger: Logger, label: str, dry_run: bool) -> None:
@@ -50,6 +76,10 @@ def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
         _log_changes(changes, logger, file_path.name, config.dry_run)
         if changes.has_changes and not config.dry_run:
             logger.info(f"Successfully processed {file_path.name}")
+            if config.reload:
+                zone_name = dns_file.origin.rstrip('.') if dns_file.origin else None
+                if not _rndc_reload(zone_name, logger):
+                    return 1
         return 0
     except FileNotFoundError as e:
         logger.error(f"File not found: '{file_path}'\n{e}")
@@ -111,6 +141,9 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
             _log_changes(changes, logger, f"{file_path.name} ({zone_name})", config.dry_run)
             if changes.has_changes and not config.dry_run:
                 logger.info(f"Successfully updated {file_path.name} ({zone_name})")
+                if config.reload:
+                    if not _rndc_reload(zone_name, logger):
+                        failed_zones.append(zone_name)
         except FileNotFoundError as e:
             logger.error(f"File not found: '{file_path}'\n{e}")
             failed_zones.append(zone_name)

@@ -1,110 +1,164 @@
-# clean_dns
+# clean-dns
 
-A command-line tool to process and manage DNS zone files. For each file it receives, it removes duplicate records, sorts records alphabetically (PTR records are sorted numerically), increments the SOA serial, and writes the result back — creating a timestamped backup of the original before any changes are made.
+A command-line tool for managing BIND9 DNS zone files.  It removes
+duplicate records, sorts records into a predictable order, and can add
+new records from a YAML file.  Every modification atomically replaces the
+zone file (with a timestamped backup) and increments the SOA serial.
+
+## Features
+
+- **Deduplication** — removes duplicate records within a zone
+- **Sorting** — alphabetical for A/AAAA/CNAME/NS/TXT, numeric for PTR, priority-then-exchange for MX
+- **Add records** — append new records from a YAML file; zone files are discovered automatically via `named-checkconf`
+- **Dry-run** — preview what would change without writing anything
+- **Change summary** — always printed, whether or not changes are applied
+- **BIND reload** — optionally trigger `rndc reload` after a successful write
+
+Supported record types: **A, AAAA, CNAME, MX, NS, PTR, TXT**.
 
 ## Requirements
 
 - Python ≥ 3.12
-- pip (included with Python)
+- [dnspython](https://www.dnspython.org/) ≥ 2.0
+- [PyYAML](https://pyyaml.org/) ≥ 6.0
+- BIND9 (`named-checkconf`) must be on PATH when using `--add-from`
+- BIND9 (`rndc`) must be on PATH when using `--reload`
 
 ## Installation
 
-### Standard (internet-connected)
-
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install -e ".[dev]"
-```
-
-### Offline (air-gapped environment)
-
-All dependencies are pre-downloaded in the `vendor/` directory and pinned in `requirements.lock`. No network access is needed after cloning.
-
-> **Platform note:** `pyinstaller` has a platform-specific wheel. The `vendor/` directory currently contains the **Linux x86_64** build. If your target host runs a different OS or CPU architecture, regenerate the vendor directory on a machine that matches the target before transferring the repository (see [Updating dependencies](#updating-dependencies)).
-
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install --no-index --find-links=vendor/ -e ".[dev,build]"
+pip install --upgrade pip
+pip install --editable .
 ```
 
 ## Usage
 
-```
-cleandns -f <file> [<file> ...]
+### Process existing zone files
+
+```bash
+cleandns --files /etc/bind/example.com.zone /etc/bind/other.net.zone
 ```
 
-| Flag | Description |
-|------|-------------|
-| `-f`, `--files` | One or more zone files to process (required) |
-| `--omit-ttl` | Omit the `$TTL` directive from the output |
-| `--omit-record-ttl` | Omit the TTL column from individual records |
-| `--omit-origin` | Omit the `$ORIGIN` directive from the output |
-| `--human-readable` | Format TTL and SOA timing values as `1h30m` instead of raw seconds |
+Reads each file, removes duplicates, sorts records, and writes the result
+back.  The original is backed up with a timestamped name before replacement
+(e.g. `example.com.zone.2024-06-01_14-30-00-123456`).
+
+### Add records from a YAML file
+
+```bash
+cleandns --add-from records.yaml
+```
+
+Zone files are discovered automatically by running `named-checkconf -p`.
+Only `master`/`primary` zones are considered.
+
+### Preview changes without writing
+
+```bash
+cleandns --dry-run --files /etc/bind/example.com.zone
+cleandns --dry-run --add-from records.yaml
+```
+
+Prints a change summary prefixed with `[DRY RUN]` and exits without
+modifying any file or creating any backup.
+
+### Reload BIND after saving
+
+```bash
+cleandns --reload --files /etc/bind/example.com.zone
+cleandns --reload --add-from records.yaml
+```
+
+Runs `rndc reload <zone>` after each zone file is successfully written.
+BIND is **not** reloaded by default — use this flag only when you are
+confident the changes are correct.  Has no effect with `--dry-run`.
+
+## CLI reference
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-f` / `--files FILE …` | — | One or more zone files to process |
+| `--add-from YAML` | — | YAML file with records to add (mutually exclusive with `--files`) |
+| `--dry-run` | off | Show what would change without writing |
+| `--reload` | off | Run `rndc reload` after each successful write |
+| `--omit-origin` | off | Do not write the `$ORIGIN` directive |
+| `--omit-ttl` | off | Do not write the `$TTL` directive |
+| `--omit-record-ttl` | off | Omit the per-record TTL column |
+| `--human-readable` | off | Format SOA timing fields as `1h30m` instead of raw seconds |
 
 `--omit-ttl` and `--omit-record-ttl` are mutually exclusive.
 
-**Examples**
+## YAML formats
 
-```bash
-cleandns -f example.com.zone
-cleandns -f zone1.dns zone2.dns --human-readable
-cleandns -f zone.dns --omit-ttl
-cleandns -f zone.dns --omit-record-ttl
-cleandns -f zone.dns --omit-origin
+Two formats are accepted; the format is auto-detected.
+
+### Standard format
+
+The top-level key is the zone name.  Each entry requires `type`, `name`,
+and `rdata`; `ttl` is optional (defaults to 3600 when omitted).
+
+```yaml
+example.com:
+  - type: A
+    name: webserver
+    ttl: 3600
+    rdata: 192.168.1.10
+
+  - type: AAAA
+    name: webserver
+    ttl: 3600
+    rdata: 2001:db8::1
+
+  - type: MX
+    name: "@"
+    ttl: 3600
+    rdata: "10 mail.example.com."
+
+  - type: TXT
+    name: "@"
+    ttl: 3600
+    rdata: '"v=spf1 include:example.com ~all"'
+
+other.net:
+  - type: CNAME
+    name: www
+    rdata: webserver   # ttl omitted — falls back to 3600
 ```
 
-## Building a standalone binary
+Multiple zones can appear in a single file.
 
-PyInstaller bundles the project and all its dependencies into a single executable that requires no Python installation on the target machine. The `clean-dns.spec` file at the root of the repository contains the build configuration.
+### dnsEntries format (A records only)
 
-`pyinstaller` is included in the `.[build]` optional dependency group and is available in the `vendor/` directory.
+A shorthand format that maps IP addresses to FQDNs.  The zone is derived
+from the FQDN using longest-suffix matching against the zones known to
+`named-checkconf`.
 
-```bash
-# Ensure the build group is installed
-pip install --no-index --find-links=vendor/ -e ".[dev,build]"
-
-# Build the binary
-pyinstaller clean-dns.spec
+```yaml
+dnsEntries:
+  - ip: 192.168.1.10
+    fqdn: webserver.example.com
+  - ip: 192.168.1.20
+    fqdn: mail.example.com
+  - ip: 10.0.0.5
+    fqdn: api.sub.example.com   # zone resolved as sub.example.com if known,
+                                 # otherwise example.com with name api.sub
 ```
 
-The executable is written to `dist/clean-dns`. It is platform-specific: a binary built on Linux will not run on macOS or Windows.
+## Known limitations
 
-## Development
+| Limitation | Details |
+|------------|---------|
+| **Comments are not preserved** | dnspython discards comments when parsing. Every file that is rewritten will lose any inline comments. |
+| **Unsupported record types block processing** | A zone file containing types not in the supported list (e.g. SRV, CAA, SSHFP) will be rejected entirely. |
+| **Backup files accumulate** | There is no automatic cleanup of timestamped backup files. |
+| **Default TTL mismatch on add** | When using `--add-from` and a record in the YAML omits its `ttl`, the fallback is 3600 — regardless of the zone file's own `$TTL` directive. |
+| **No serial overflow guard** | The SOA serial is incremented by 1 with no check for the 32-bit unsigned maximum (4 294 967 295). |
 
-**Run tests**
+## Running the tests
 
 ```bash
+source venv/bin/activate
 pytest
-```
-
-**Type checking**
-
-```bash
-pyright
-```
-
-## Updating dependencies
-
-When `pyproject.toml` changes (new dependency, version bump), regenerate the lock file and vendor directory on an **internet-connected machine that matches the target platform**, then commit the result.
-
-`pip-tools` is required for this step and must be installed on the internet-connected machine:
-
-```bash
-pip install pip-tools
-```
-
-Regenerate the lock file and re-download all wheels:
-
-```bash
-pip-compile --extra=dev --extra=build --output-file=requirements.lock pyproject.toml
-pip download -r requirements.lock -d vendor/
-```
-
-Commit the updated `requirements.lock` and `vendor/`:
-
-```bash
-git add requirements.lock vendor/
-git commit -m "Update pinned dependencies"
 ```
