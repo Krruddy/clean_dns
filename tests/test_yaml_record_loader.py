@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from cleandns.yaml_record_loader import YAMLRecordLoader
-from cleandns.record_types import RecordType, ARecord, AAAARecord, CNAMERecord, PTRRecord
+from cleandns.record_types import RecordType, ARecord, AAAARecord, CNAMERecord, MXRecord, PTRRecord, TXTRecord
 from cleandns.exceptions import InvalidYAMLError, UnknownRecordTypeError
 
 ENCODING = "utf-8"
@@ -166,15 +166,43 @@ example.com:
         YAMLRecordLoader.load(p)
 
 
-def test_load_raises_on_unknown_type(tmp_path):
+def test_load_mx_record(tmp_path):
     p = write_yaml(tmp_path, """\
 example.com:
   - type: MX
-    name: host1
+    name: "@"
     ttl: 3600
-    rdata: 10 mail.example.com.
+    rdata: "10 mail.example.com."
 """)
-    with pytest.raises(UnknownRecordTypeError, match="MX"):
+    result = YAMLRecordLoader.load(p)
+    record = result["example.com"][0]
+    assert isinstance(record, MXRecord)
+    assert record.rdata == "10 mail.example.com."
+
+
+def test_load_txt_record(tmp_path):
+    p = write_yaml(tmp_path, """\
+example.com:
+  - type: TXT
+    name: "@"
+    ttl: 3600
+    rdata: '"v=spf1 include:example.com ~all"'
+""")
+    result = YAMLRecordLoader.load(p)
+    record = result["example.com"][0]
+    assert isinstance(record, TXTRecord)
+    assert "spf1" in record.rdata
+
+
+def test_load_raises_on_unknown_type(tmp_path):
+    p = write_yaml(tmp_path, """\
+example.com:
+  - type: CAA
+    name: "@"
+    ttl: 3600
+    rdata: '0 issue "ca.example.com"'
+""")
+    with pytest.raises(UnknownRecordTypeError, match="CAA"):
         YAMLRecordLoader.load(p)
 
 

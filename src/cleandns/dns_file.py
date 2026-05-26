@@ -13,8 +13,8 @@ import dns.rdataclass
 import dns.ttl
 import dns.rdatatype
 
-from cleandns.record_types import ARecord, AAAARecord, NSRecord, CNAMERecord, SOARecord, PTRRecord, RecordType, \
-    DNSClass, AbstractRecord
+from cleandns.record_types import ARecord, AAAARecord, NSRecord, CNAMERecord, MXRecord, SOARecord, PTRRecord, \
+    TXTRecord, RecordType, DNSClass, AbstractRecord
 
 from pathlib import Path
 
@@ -77,11 +77,13 @@ class DNSFile:
 
         # Mapping for standard records that share the same constructor signature
         record_types = {
-            dns.rdatatype.A: (ARecord, RecordType.A),
-            dns.rdatatype.AAAA: (AAAARecord, RecordType.AAAA),
-            dns.rdatatype.NS: (NSRecord, RecordType.NS),
+            dns.rdatatype.A:     (ARecord,     RecordType.A),
+            dns.rdatatype.AAAA:  (AAAARecord,  RecordType.AAAA),
+            dns.rdatatype.NS:    (NSRecord,    RecordType.NS),
             dns.rdatatype.CNAME: (CNAMERecord, RecordType.CNAME),
-            dns.rdatatype.PTR: (PTRRecord, RecordType.PTR),
+            dns.rdatatype.MX:    (MXRecord,    RecordType.MX),
+            dns.rdatatype.PTR:   (PTRRecord,   RecordType.PTR),
+            dns.rdatatype.TXT:   (TXTRecord,   RecordType.TXT),
         }
 
         unsupported: Counter[str] = Counter()

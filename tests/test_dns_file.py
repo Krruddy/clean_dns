@@ -126,7 +126,7 @@ def test_unsupported_record_type_raises_error(tmp_path, sample_ttl_line, sample_
         f"{sample_origin_line}\n"
         f"{sample_soa_block}\n"
         f"{sample_ns_block}\n"
-        "@   IN  MX  10 mail.example.com.\n"
+        '@   IN  CAA 0 issue "ca.example.com"\n'
     )
     p = tmp_path / "unsupported.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
@@ -141,13 +141,13 @@ def test_unsupported_record_type_error_message_includes_type_and_count(tmp_path,
         f"{sample_origin_line}\n"
         f"{sample_soa_block}\n"
         f"{sample_ns_block}\n"
-        "@   IN  MX  10 mail.example.com.\n"
-        "@   IN  MX  20 mail2.example.com.\n"
+        '@   IN  CAA 0 issue "ca.example.com"\n'
+        '@   IN  CAA 0 issuewild "ca.example.com"\n'
     )
     p = tmp_path / "unsupported.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
 
-    with pytest.raises(UnsupportedRecordTypeError, match=r"MX \(2\)"):
+    with pytest.raises(UnsupportedRecordTypeError, match=r"CAA \(2\)"):
         DNSFile(p, default_config)
 
 def test_multiple_unsupported_record_types_all_reported(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, default_config):
@@ -157,8 +157,8 @@ def test_multiple_unsupported_record_types_all_reported(tmp_path, sample_ttl_lin
         f"{sample_origin_line}\n"
         f"{sample_soa_block}\n"
         f"{sample_ns_block}\n"
-        '@   IN  MX  10 mail.example.com.\n'
-        '@   IN  TXT "v=spf1 include:example.com ~all"\n'
+        '@   IN  CAA  0 issue "ca.example.com"\n'
+        '@   IN  SSHFP 1 1 de3487a5c98af0ea64e14b6e43b28b97f5e50d72\n'
     )
     p = tmp_path / "unsupported.zone"
     p.write_text(content, encoding=ZONE_FILE_ENCODING)
@@ -167,8 +167,74 @@ def test_multiple_unsupported_record_types_all_reported(tmp_path, sample_ttl_lin
         DNSFile(p, default_config)
 
     message = str(exc_info.value)
-    assert "MX" in message
-    assert "TXT" in message
+    assert "CAA" in message
+    assert "SSHFP" in message
+
+# --- MX and TXT record tests ---
+
+def test_load_zone_with_mx_records(tmp_path, mx_zone_content, default_config):
+    """Zone file containing MX records must parse without error and expose them via RecordType.MX."""
+    p = tmp_path / "mx.zone"
+    p.write_text(mx_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    dns_file = DNSFile(p, default_config)
+
+    assert RecordType.MX in dns_file.records
+    assert len(dns_file.records[RecordType.MX]) == 2
+
+def test_load_zone_with_txt_records(tmp_path, txt_zone_content, default_config):
+    """Zone file containing TXT records must parse without error and expose them via RecordType.TXT."""
+    p = tmp_path / "txt.zone"
+    p.write_text(txt_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    dns_file = DNSFile(p, default_config)
+
+    assert RecordType.TXT in dns_file.records
+    assert len(dns_file.records[RecordType.TXT]) == 1
+
+def test_sort_mx_records(tmp_path, complex_mx_zone_content, expected_sorted_mx_priorities, expected_sorted_mx_exchanges, default_config):
+    """sort() must order MX records by preference ascending, with exchange name as the tiebreak."""
+    p = tmp_path / "mx_unsorted.zone"
+    p.write_text(complex_mx_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    dns_file = DNSFile(p, default_config)
+    dns_file.sort()
+
+    records = dns_file.records[RecordType.MX]
+    assert [int(r.rdata.split()[0]) for r in records] == expected_sorted_mx_priorities
+    assert [r.rdata.split(None, 1)[1] for r in records] == expected_sorted_mx_exchanges
+
+def test_full_pipeline_round_trip_with_mx_and_txt(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, default_config):
+    """Full pipeline with MX and TXT records must produce a valid, reloadable zone."""
+    content = (
+        f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n\n"
+        f"{sample_ns_block}\n"
+        "@   IN  MX  20 mail2.example.com.\n"
+        "@   IN  MX  10 mail1.example.com.\n"
+        '@   IN  TXT "v=spf1 include:example.com ~all"\n'
+    )
+    p = tmp_path / "mixed.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    dns_file = DNSFile(p, default_config)
+    assert dns_file.soa_record is not None
+    original_serial = dns_file.soa_record.serial
+
+    dns_file.remove_duplicates()
+    dns_file.sort()
+    dns_file.save()
+
+    reloaded = DNSFile(p, default_config)
+    assert reloaded.soa_record is not None
+    assert reloaded.soa_record.serial == original_serial + 1
+    assert len(reloaded.records[RecordType.MX]) == 2
+    assert len(reloaded.records[RecordType.TXT]) == 1
+    # MX must be sorted: preference 10 before 20
+    mx = reloaded.records[RecordType.MX]
+    assert int(mx[0].rdata.split()[0]) == 10
+    assert int(mx[1].rdata.split()[0]) == 20
 
 # --- Logic Tests ---
 

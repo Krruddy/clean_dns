@@ -4,7 +4,7 @@ import yaml
 
 from cleandns.exceptions import InvalidYAMLError, UnknownRecordTypeError
 from cleandns.record_types import (
-    ARecord, AAAARecord, NSRecord, CNAMERecord, PTRRecord,
+    ARecord, AAAARecord, NSRecord, CNAMERecord, MXRecord, PTRRecord, TXTRecord,
     RecordType, DNSClass, AbstractRecord,
 )
 
@@ -16,7 +16,9 @@ _RECORD_TYPES: dict[str, tuple[type[AbstractRecord], RecordType]] = {
     "AAAA":  (AAAARecord,  RecordType.AAAA),
     "NS":    (NSRecord,    RecordType.NS),
     "CNAME": (CNAMERecord, RecordType.CNAME),
+    "MX":    (MXRecord,    RecordType.MX),
     "PTR":   (PTRRecord,   RecordType.PTR),
+    "TXT":   (TXTRecord,   RecordType.TXT),
 }
 
 

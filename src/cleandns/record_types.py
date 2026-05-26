@@ -10,7 +10,9 @@ class RecordType(Enum):
     A = 'A'
     AAAA = 'AAAA'
     CNAME = 'CNAME'
+    MX = 'MX'
     PTR = 'PTR'
+    TXT = 'TXT'
 
 class DNSClass(Enum):
     IN = 'IN'
@@ -134,6 +136,31 @@ class AAAARecord(AbstractRecord):
 @dataclass
 class CNAMERecord(AbstractRecord):
     pass
+
+@dataclass
+class MXRecord(AbstractRecord):
+    """
+    Represents a Mail Exchange (MX) DNS record.
+    Sorted by preference (ascending), then by exchange name.
+    """
+
+    @override
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, MXRecord):
+            return super().__lt__(other)
+        self_pref, self_exchange = self.rdata.split(None, 1)
+        other_pref, other_exchange = other.rdata.split(None, 1)
+        if self_pref != other_pref:
+            return int(self_pref) < int(other_pref)
+        return self_exchange.lower() < other_exchange.lower()
+
+
+@dataclass
+class TXTRecord(AbstractRecord):
+    """
+    Represents a Text (TXT) DNS record.
+    """
+
 
 @dataclass
 class PTRRecord(AbstractRecord):

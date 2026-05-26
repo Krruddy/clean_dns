@@ -1,5 +1,5 @@
 import pytest
-from cleandns.record_types import ARecord, PTRRecord, SOARecord, RecordType, DNSClass
+from cleandns.record_types import ARecord, MXRecord, PTRRecord, SOARecord, TXTRecord, RecordType, DNSClass
 
 
 # --- Factories ---
@@ -58,9 +58,68 @@ def test_ptr_record_lt_numeric():
     records = [make_ptr_record(name=n) for n in ["10.0.0", "2.0.0", "1.0.0"]]
     assert [r.name for r in sorted(records)] == ["1.0.0", "2.0.0", "10.0.0"]
 
+def make_mx_record(name="@", rdata="10 mail.example.com.", ttl=3600, omit_ttl=False) -> MXRecord:
+    return MXRecord(name=name, ttl=ttl, class_=DNSClass.IN, type=RecordType.MX, rdata=rdata, omit_ttl=omit_ttl)
+
+def make_txt_record(name="@", rdata='"v=spf1 ~all"', ttl=3600, omit_ttl=False) -> TXTRecord:
+    return TXTRecord(name=name, ttl=ttl, class_=DNSClass.IN, type=RecordType.TXT, rdata=rdata, omit_ttl=omit_ttl)
+
+
 def test_ptr_record_lt_falls_back_for_non_ptr():
     """PTR compared against a non-PTR falls back to AbstractRecord.__lt__."""
     assert make_ptr_record(name="alpha") < make_a_record(name="beta")
+
+
+# --- MXRecord.__lt__ ---
+
+def test_mx_record_lt_by_preference():
+    """MX records sort by preference ascending."""
+    assert make_mx_record(rdata="10 mail.example.com.") < make_mx_record(rdata="20 mail.example.com.")
+
+def test_mx_record_lt_preference_is_numeric():
+    """Preference comparison must be numeric, not lexicographic (2 < 10 < 100)."""
+    records = [make_mx_record(rdata=f"{p} mail.example.com.") for p in [100, 2, 10]]
+    assert [int(r.rdata.split()[0]) for r in sorted(records)] == [2, 10, 100]
+
+def test_mx_record_lt_exchange_as_tiebreak():
+    """Records with equal preference sort alphabetically by exchange name."""
+    assert make_mx_record(rdata="10 a.example.com.") < make_mx_record(rdata="10 b.example.com.")
+
+def test_mx_record_lt_exchange_tiebreak_is_case_insensitive():
+    """Exchange tiebreak ignores case."""
+    assert make_mx_record(rdata="10 AAA.example.com.") < make_mx_record(rdata="10 bbb.example.com.")
+
+def test_mx_record_lt_falls_back_for_non_mx():
+    """MX compared against a non-MX record falls back to AbstractRecord.__lt__."""
+    assert make_mx_record(name="alpha") < make_a_record(name="beta")
+
+
+# --- MXRecord.__str__ ---
+
+@pytest.mark.parametrize("omit_ttl,present", [(False, True), (True, False)])
+def test_mx_record_str_ttl_visibility(omit_ttl, present):
+    """MXRecord must honour omit_ttl the same way AbstractRecord does."""
+    assert ("3600" in str(make_mx_record(omit_ttl=omit_ttl))) == present
+
+def test_mx_record_str_contains_preference_and_exchange():
+    """MXRecord str must include both the preference value and the exchange name."""
+    r = make_mx_record(rdata="10 mail.example.com.")
+    assert "MX" in str(r)
+    assert "10 mail.example.com." in str(r)
+
+
+# --- TXTRecord.__str__ ---
+
+def test_txt_record_str_contains_type_and_rdata():
+    """TXTRecord str must include the type and the quoted rdata."""
+    r = make_txt_record()
+    assert "TXT" in str(r)
+    assert '"v=spf1 ~all"' in str(r)
+
+@pytest.mark.parametrize("omit_ttl,present", [(False, True), (True, False)])
+def test_txt_record_str_ttl_visibility(omit_ttl, present):
+    """TXTRecord must honour omit_ttl the same way AbstractRecord does."""
+    assert ("3600" in str(make_txt_record(omit_ttl=omit_ttl))) == present
 
 
 # --- SOARecord.increment_serial ---

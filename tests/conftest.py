@@ -134,6 +134,48 @@ def expected_sorted_a_names():
     ]
 
 @pytest.fixture
+def sample_mx_records_block():
+    return """@   IN  MX  10 mail1.example.com.
+@   IN  MX  20 mail2.example.com."""
+
+@pytest.fixture
+def complex_mx_records_block():
+    """MX records in unsorted order, mixing priority ties and multi-digit values."""
+    return """@   IN  MX  30  mail3.example.com.
+@   IN  MX  10  mail1b.example.com.
+@   IN  MX  100 mail4.example.com.
+@   IN  MX  10  mail1a.example.com.
+@   IN  MX  20  mail2.example.com."""
+
+@pytest.fixture
+def sample_txt_records_block():
+    return '@   IN  TXT "v=spf1 include:example.com ~all"'
+
+@pytest.fixture
+def mx_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, sample_mx_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{sample_mx_records_block}\n"
+
+@pytest.fixture
+def complex_mx_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, complex_mx_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{complex_mx_records_block}\n"
+
+@pytest.fixture
+def txt_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, sample_txt_records_block):
+    return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{sample_txt_records_block}\n"
+
+@pytest.fixture
+def expected_sorted_mx_priorities():
+    """Expected MX preference order after sorting the complex_mx_records_block."""
+    return [10, 10, 20, 30, 100]
+
+@pytest.fixture
+def expected_sorted_mx_exchanges():
+    """Expected exchange order within tied preferences after sorting.
+    dnspython relativizes names to the zone origin, so mail1a.example.com. → mail1a.
+    """
+    return ["mail1a", "mail1b", "mail2", "mail3", "mail4"]
+
+@pytest.fixture
 def expected_sorted_ptr_names():
     """Returns the expected order of names from the complex PTR block after numeric sorting."""
     return [
