@@ -49,10 +49,15 @@ class YAMLFormat(ABC):
         data: object,
         filename: str,
         default_ttl: int,
+        zone_map: dict[str, Path] | None = None,
     ) -> dict[str, list[AbstractRecord]]:
         """
         Parse *data* and return a mapping of zone name to the list of records
         to add to that zone.  Raise InvalidYAMLError on any validation failure.
+
+        *zone_map* is the BIND zone-name → file-path mapping from
+        named-checkconf.  Formats that derive zone names from FQDNs should use
+        it for accurate matching; formats with explicit zone names may ignore it.
         """
         ...
 
@@ -80,6 +85,7 @@ class StandardFormat(YAMLFormat):
         data: object,
         filename: str,
         default_ttl: int,
+        zone_map: dict[str, Path] | None = None,
     ) -> dict[str, list[AbstractRecord]]:
         if not isinstance(data, dict):
             raise InvalidYAMLError(
@@ -124,6 +130,7 @@ class DNSEntriesFormat(YAMLFormat):
         data: object,
         filename: str,
         default_ttl: int,
+        zone_map: dict[str, Path] | None = None,
     ) -> dict[str, list[AbstractRecord]]:
         if not isinstance(data, dict) or not isinstance(data.get("dnsEntries"), list):
             raise InvalidYAMLError(
@@ -150,7 +157,7 @@ class DNSEntriesFormat(YAMLFormat):
                     f"'{filename}': missing required field 'fqdn' in dnsEntries entry."
                 )
 
-            name, zone = _split_fqdn(str(fqdn_raw), filename)
+            name, zone = _resolve_fqdn(str(fqdn_raw), filename, zone_map)
 
             record = ARecord(
                 name=name,
@@ -180,7 +187,11 @@ class YAMLRecordLoader:
     """
 
     @staticmethod
-    def load(path: Path, default_ttl: int = _DEFAULT_TTL) -> dict[str, list[AbstractRecord]]:
+    def load(
+        path: Path,
+        default_ttl: int = _DEFAULT_TTL,
+        zone_map: dict[str, Path] | None = None,
+    ) -> dict[str, list[AbstractRecord]]:
         """
         Parse the YAML file at *path* and return a mapping of zone name to
         the list of records to add to that zone.  The format is auto-detected.
@@ -188,6 +199,13 @@ class YAMLRecordLoader:
         *default_ttl* is used for any record that does not declare its own TTL.
         Pass the zone file's $TTL here so that omitted TTLs are consistent with
         the rest of the zone.
+
+        *zone_map* is the BIND zone-name → file-path mapping from
+        named-checkconf (as returned by NamedConfParser.from_system()).  When
+        provided, formats that derive zone names from FQDNs — such as
+        DNSEntriesFormat — use longest-suffix matching to resolve each FQDN to
+        the correct zone.  When omitted, those formats fall back to stripping
+        only the first label.
         """
         try:
             with open(path) as f:
@@ -199,7 +217,7 @@ class YAMLRecordLoader:
 
         for fmt in _FORMATS:
             if fmt.can_parse(data):
-                return fmt.parse(data, path.name, default_ttl)
+                return fmt.parse(data, path.name, default_ttl, zone_map)
 
         raise InvalidYAMLError(
             f"'{path.name}': unrecognised YAML structure. "
@@ -253,20 +271,48 @@ def _build_record(
     )
 
 
-def _split_fqdn(fqdn: str, filename: str) -> tuple[str, str]:
+def _resolve_fqdn(
+    fqdn: str,
+    filename: str,
+    zone_map: dict[str, Path] | None,
+) -> tuple[str, str]:
     """
-    Split an FQDN into (hostname, zone).
+    Resolve an FQDN to (name, zone).
 
-    Examples:
-        'host3.example.com'   → ('host3', 'example.com')
-        'web.sub.example.com' → ('web',   'sub.example.com')
+    When *zone_map* is provided, uses longest-suffix matching so that the most
+    specific known zone is preferred over a less specific parent:
 
-    Raises InvalidYAMLError if the FQDN cannot yield at least two labels.
+        FQDN 'host.sub.example.com' against zones
+        {'sub.example.com', 'example.com'}
+        → name='host', zone='sub.example.com'   ✓  (not example.com)
+
+        FQDN 'host.sub.example.com' against zones {'example.com'}
+        → name='host.sub', zone='example.com'   ✓
+
+    When *zone_map* is None, falls back to stripping the first label only
+    (appropriate for tests or invocations without BIND context):
+        'host3.example.com' → ('host3', 'example.com')
+
+    Raises InvalidYAMLError if the FQDN has fewer than two labels, or if
+    *zone_map* is provided but no zone matches.
     """
-    labels = fqdn.rstrip('.').split('.', 1)
-    if len(labels) != 2 or not labels[0] or not labels[1]:
+    labels = fqdn.rstrip('.').split('.')
+
+    if len(labels) < 2 or not labels[0]:
         raise InvalidYAMLError(
             f"'{filename}': cannot derive a zone from FQDN '{fqdn}': "
             f"expected at least two dot-separated labels."
         )
-    return labels[0], labels[1]
+
+    if zone_map is not None:
+        # Try all suffixes from most specific (longest) to least specific.
+        for i in range(1, len(labels)):
+            candidate_zone = '.'.join(labels[i:])
+            if candidate_zone in zone_map:
+                return '.'.join(labels[:i]), candidate_zone
+        raise InvalidYAMLError(
+            f"'{filename}': FQDN '{fqdn}' does not match any known zone."
+        )
+
+    # Fallback: strip the first label only.
+    return labels[0], '.'.join(labels[1:])

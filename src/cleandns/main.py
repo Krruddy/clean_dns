@@ -59,7 +59,7 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
         return 1
 
     try:
-        records_by_zone = YAMLRecordLoader.load(yaml_path)
+        records_by_zone = YAMLRecordLoader.load(yaml_path, zone_map=zone_map)
     except InvalidYAMLError as e:
         logger.error(f"Could not load YAML file: {e}")
         return 1

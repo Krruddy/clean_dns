@@ -353,3 +353,62 @@ def test_dns_entries_raises_when_entry_is_not_a_mapping(tmp_path):
     p = write_yaml(tmp_path, "dnsEntries:\n  - just-a-string\n")
     with pytest.raises(InvalidYAMLError, match="must be a mapping"):
         YAMLRecordLoader.load(p)
+
+
+# ---------------------------------------------------------------------------
+# DNSEntriesFormat — zone_map-based resolution
+# ---------------------------------------------------------------------------
+
+def test_dns_entries_zone_map_resolves_correct_zone(tmp_path):
+    """When zone_map is provided the FQDN is matched against the known zones."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: web.example.com
+""")
+    zone_map = {"example.com": Path("/etc/bind/example.com.zone")}
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    assert "example.com" in result
+    assert result["example.com"][0].name == "web"
+
+
+def test_dns_entries_zone_map_prefers_longest_match(tmp_path):
+    """Longest-suffix matching picks the most specific zone over a parent zone."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: host.sub.example.com
+""")
+    zone_map = {
+        "example.com":     Path("/etc/bind/example.com.zone"),
+        "sub.example.com": Path("/etc/bind/sub.example.com.zone"),
+    }
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    assert "sub.example.com" in result
+    assert result["sub.example.com"][0].name == "host"
+    assert "example.com" not in result
+
+
+def test_dns_entries_zone_map_falls_back_to_parent_when_no_subzone(tmp_path):
+    """When only the parent zone is known, the sub-domain labels become part of the name."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: host.sub.example.com
+""")
+    zone_map = {"example.com": Path("/etc/bind/example.com.zone")}
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    assert "example.com" in result
+    assert result["example.com"][0].name == "host.sub"
+
+
+def test_dns_entries_zone_map_raises_on_unmatched_fqdn(tmp_path):
+    """An FQDN that matches no known zone must raise InvalidYAMLError."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: host.unknown.com
+""")
+    zone_map = {"example.com": Path("/etc/bind/example.com.zone")}
+    with pytest.raises(InvalidYAMLError, match="does not match any known zone"):
+        YAMLRecordLoader.load(p, zone_map=zone_map)
