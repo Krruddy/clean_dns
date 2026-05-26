@@ -7,3 +7,4 @@ class DNSConfig:
     human_readable: bool = False
     omit_ttl: bool = False
     omit_record_ttl: bool = False
+    dry_run: bool = False

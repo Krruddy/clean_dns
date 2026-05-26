@@ -43,6 +43,7 @@ def test_unknown_arguments():
     (["--human-readable"],  "human_readable"),
     (["--omit-ttl"],        "omit_ttl"),
     (["--omit-record-ttl"], "omit_record_ttl"),
+    (["--dry-run"],         "dry_run"),
 ])
 def test_config_flag_sets_attribute(flag, attr):
     """Each config flag must set its corresponding DNSConfig attribute to True."""
@@ -57,6 +58,7 @@ def test_config_flags_default_to_false():
     assert result.config.human_readable is False
     assert result.config.omit_ttl is False
     assert result.config.omit_record_ttl is False
+    assert result.config.dry_run is False
 
 
 def test_omit_ttl_and_omit_record_ttl_are_mutually_exclusive():

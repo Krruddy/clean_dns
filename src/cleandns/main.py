@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from cleandns.argument_parser import ArgumentParser
 from cleandns.config import DNSConfig
-from cleandns.dns_file import DNSFile
+from cleandns.dns_file import DNSFile, ZoneChanges
 from cleandns.logger import Logger
 from cleandns.named_conf_parser import NamedConfParser
 from cleandns.yaml_record_loader import YAMLRecordLoader
@@ -10,6 +10,28 @@ from cleandns.exceptions import (
     InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError,
     NamedConfError, InvalidYAMLError, ZoneNotFoundError,
 )
+
+
+def _log_changes(changes: ZoneChanges, logger: Logger, label: str, dry_run: bool) -> None:
+    """Log a human-readable summary of what did (or would) change in a zone."""
+    tag = "[DRY RUN] " if dry_run else ""
+
+    if not changes.has_changes:
+        logger.info(f"{tag}{label}: no changes")
+        return
+
+    parts: list[str] = []
+    if changes.records_added:
+        record_strs = ", ".join(f"{r.name} ({r.type.value})" for r in changes.records_added)
+        parts.append(f"added {len(changes.records_added)} record(s): {record_strs}")
+    if changes.duplicates_removed:
+        parts.append(f"removed {len(changes.duplicates_removed)} duplicate(s)")
+    if changes.was_reordered:
+        parts.append("reordered records")
+    if changes.serial_before != changes.serial_after:
+        parts.append(f"serial {changes.serial_before} → {changes.serial_after}")
+
+    logger.info(f"{tag}{label}: {'; '.join(parts)}")
 
 
 def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
@@ -24,8 +46,10 @@ def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
         dns_file = DNSFile(file_path, config)
         dns_file.remove_duplicates()
         dns_file.sort()
-        dns_file.save()
-        logger.info(f"Successfully processed {file_path.name}")
+        changes = dns_file.save()
+        _log_changes(changes, logger, file_path.name, config.dry_run)
+        if changes.has_changes and not config.dry_run:
+            logger.info(f"Successfully processed {file_path.name}")
         return 0
     except FileNotFoundError as e:
         logger.error(f"File not found: '{file_path}'\n{e}")
@@ -83,8 +107,10 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
                 dns_file.add_record(record)
             dns_file.remove_duplicates()
             dns_file.sort()
-            dns_file.save()
-            logger.info(f"Successfully updated {file_path.name} ({zone_name})")
+            changes = dns_file.save()
+            _log_changes(changes, logger, f"{file_path.name} ({zone_name})", config.dry_run)
+            if changes.has_changes and not config.dry_run:
+                logger.info(f"Successfully updated {file_path.name} ({zone_name})")
         except FileNotFoundError as e:
             logger.error(f"File not found: '{file_path}'\n{e}")
             failed_zones.append(zone_name)

@@ -1,9 +1,9 @@
 import pytest
 from cleandns.config import DNSConfig
-from cleandns.dns_file import DNSFile
+from cleandns.dns_file import DNSFile, ZoneChanges
 from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
 from cleandns.exceptions import MissingSOARecordError, UnsupportedRecordTypeError
-from cleandns.record_types import RecordType
+from cleandns.record_types import ARecord, DNSClass, RecordType
 
 ZONE_FILE_ENCODING = "utf-8"
 
@@ -305,7 +305,6 @@ def test_add_record_increases_count_and_sets_modified(zone_file, default_config)
     initial_count = len(dns.records[RecordType.A])
     assert dns.modified is False
 
-    from cleandns.record_types import ARecord, DNSClass
     new_record = ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.99", omit_ttl=False)
     dns.add_record(new_record)
 
@@ -317,7 +316,6 @@ def test_add_record_aligns_omit_ttl_with_config(zone_file):
     config = DNSConfig(omit_record_ttl=True)
     dns = DNSFile(zone_file, config)
 
-    from cleandns.record_types import ARecord, DNSClass
     record = ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.99", omit_ttl=False)
     dns.add_record(record)
 
@@ -330,7 +328,6 @@ def test_add_duplicate_record_is_removed_by_remove_duplicates(zone_file, default
     existing = dns.records[RecordType.A][0]
     initial_count = len(dns.records[RecordType.A])
 
-    from cleandns.record_types import ARecord, DNSClass
     duplicate = ARecord(
         name=existing.name, ttl=existing.ttl, class_=DNSClass.IN,
         type=RecordType.A, rdata=existing.rdata, omit_ttl=False,
@@ -352,7 +349,8 @@ def test_directive_omitted_when_flag_set(zone_file, flag, directive):
     """Setting an omit_* flag must remove the corresponding directive from the output file."""
     config = DNSConfig(**{flag: True})
     dns = DNSFile(zone_file, config)
-    dns.modified = True
+    # Add a record so that save() has a genuine modification to write
+    dns.add_record(ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.255.255.1", omit_ttl=False))
     dns.save()
     assert directive not in zone_file.read_text(encoding=ZONE_FILE_ENCODING)
 
@@ -394,8 +392,9 @@ def test_save_creates_backup_and_updates_file(zone_file, default_config):
     assert dns.soa_record is not None
     original_serial = dns.soa_record.serial
 
-    # Mark as modified to trigger serial update and file write
-    dns.modified = True
+    # Add a record to trigger a genuine modification so the file is written
+    new_record = ARecord(name="probe", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.99.99.1", omit_ttl=False)
+    dns.add_record(new_record)
     dns.save()
 
     # 1. Verify content was updated (serial incremented)
@@ -409,3 +408,138 @@ def test_save_creates_backup_and_updates_file(zone_file, default_config):
     assert len(backups) > 0
     # Verify backup content matches original state
     assert backups[0].read_text(encoding=ZONE_FILE_ENCODING) == original_content
+
+
+# ---------------------------------------------------------------------------
+# ZoneChanges — return value of save()
+# ---------------------------------------------------------------------------
+
+def test_save_returns_zone_changes(zone_file, default_config):
+    """save() must always return a ZoneChanges instance."""
+    dns = DNSFile(zone_file, default_config)
+    result = dns.save()
+    assert isinstance(result, ZoneChanges)
+
+
+def test_zone_changes_has_changes_false_when_unmodified(zone_file, default_config):
+    """ZoneChanges.has_changes must be False when no modifications were made."""
+    dns = DNSFile(zone_file, default_config)
+    changes = dns.save()
+    assert changes.has_changes is False
+
+
+def test_zone_changes_records_added(zone_file, default_config):
+    """ZoneChanges.records_added must contain every record passed to add_record()."""
+    dns = DNSFile(zone_file, default_config)
+    r1 = ARecord(name="host1", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="1.2.3.4", omit_ttl=False)
+    r2 = ARecord(name="host2", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="1.2.3.5", omit_ttl=False)
+    dns.add_record(r1)
+    dns.add_record(r2)
+    changes = dns.save()
+
+    assert changes.has_changes is True
+    assert len(changes.records_added) == 2
+    assert r1 in changes.records_added
+    assert r2 in changes.records_added
+
+
+def test_zone_changes_duplicates_removed(zone_file, default_config):
+    """ZoneChanges.duplicates_removed must list the records that were dropped."""
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    duplicate = ARecord(
+        name=existing.name, ttl=existing.ttl, class_=DNSClass.IN,
+        type=RecordType.A, rdata=existing.rdata, omit_ttl=False,
+    )
+    # Directly append so _records_added doesn't inflate the count
+    dns.records[RecordType.A].append(duplicate)
+    dns.modified = True  # force save to compute serial_after correctly
+    dns.remove_duplicates()
+    changes = dns.save()
+
+    assert changes.has_changes is True
+    assert len(changes.duplicates_removed) == 1
+
+
+def test_zone_changes_was_reordered(tmp_path, complex_forward_zone_content, default_config):
+    """ZoneChanges.was_reordered must be True when sort() changes record order."""
+    p = tmp_path / "unsorted.zone"
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
+    dns = DNSFile(p, default_config)
+    dns.sort()
+    changes = dns.save()
+
+    assert changes.was_reordered is True
+    assert changes.has_changes is True
+
+
+def test_zone_changes_serial_fields(zone_file, default_config):
+    """serial_before and serial_after must reflect the SOA serial increment."""
+    dns = DNSFile(zone_file, default_config)
+    assert dns.soa_record is not None
+    original_serial = dns.soa_record.serial
+
+    dns.add_record(ARecord(name="x", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="9.9.9.9", omit_ttl=False))
+    changes = dns.save()
+
+    assert changes.serial_before == original_serial
+    assert changes.serial_after == original_serial + 1
+
+
+def test_zone_changes_serial_unchanged_when_unmodified(zone_file, default_config):
+    """When nothing was changed serial_before must equal serial_after."""
+    dns = DNSFile(zone_file, default_config)
+    changes = dns.save()
+    assert changes.serial_before == changes.serial_after
+
+
+# ---------------------------------------------------------------------------
+# Dry-run mode
+# ---------------------------------------------------------------------------
+
+def test_dry_run_does_not_write_file(zone_file):
+    """With dry_run=True save() must not modify the zone file on disk."""
+    original_content = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+    config = DNSConfig(dry_run=True)
+    dns = DNSFile(zone_file, config)
+    dns.add_record(ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.1", omit_ttl=False))
+    dns.sort()
+    dns.save()
+
+    assert zone_file.read_text(encoding=ZONE_FILE_ENCODING) == original_content
+
+
+def test_dry_run_creates_no_backup(zone_file):
+    """With dry_run=True no backup file must be created."""
+    config = DNSConfig(dry_run=True)
+    dns = DNSFile(zone_file, config)
+    dns.add_record(ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.1", omit_ttl=False))
+    dns.save()
+
+    backups = [f for f in zone_file.parent.iterdir() if f.name.startswith(zone_file.name) and f != zone_file]
+    assert len(backups) == 0
+
+
+def test_dry_run_still_returns_zone_changes_with_has_changes(zone_file):
+    """With dry_run=True ZoneChanges must still report what would have changed."""
+    config = DNSConfig(dry_run=True)
+    dns = DNSFile(zone_file, config)
+    dns.add_record(ARecord(name="newhost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.1", omit_ttl=False))
+    changes = dns.save()
+
+    assert changes.has_changes is True
+    assert len(changes.records_added) == 1
+    assert changes.serial_after == changes.serial_before + 1
+
+
+def test_dry_run_does_not_increment_serial_in_memory(zone_file):
+    """With dry_run=True the in-memory SOA serial must not be incremented."""
+    config = DNSConfig(dry_run=True)
+    dns = DNSFile(zone_file, config)
+    assert dns.soa_record is not None
+    original_serial = dns.soa_record.serial
+
+    dns.add_record(ARecord(name="x", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="1.1.1.1", omit_ttl=False))
+    dns.save()
+
+    assert dns.soa_record.serial == original_serial

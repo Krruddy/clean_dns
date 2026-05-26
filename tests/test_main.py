@@ -184,3 +184,53 @@ def test_main_routes_to_add_from_yaml(tmp_path):
         from cleandns.main import main
         assert main() == 0
         mock_add.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Dry-run mode — end-to-end via process_file / add_from_yaml
+# ---------------------------------------------------------------------------
+
+def test_process_file_dry_run_does_not_modify_file(tmp_path, forward_sample_zone_content, logger):
+    """With dry_run=True process_file must return 0 but leave the file unchanged."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+    original = p.read_text(encoding=ZONE_FILE_ENCODING)
+    dry_config = DNSConfig(dry_run=True)
+
+    assert process_file(p, logger, dry_config) == 0
+    assert p.read_text(encoding=ZONE_FILE_ENCODING) == original
+
+
+def test_process_file_dry_run_creates_no_backup(tmp_path, forward_sample_zone_content, logger):
+    """With dry_run=True no backup file must be created."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+    dry_config = DNSConfig(dry_run=True)
+
+    process_file(p, logger, dry_config)
+
+    backups = [f for f in p.parent.iterdir() if f.name.startswith(p.name) and f != p]
+    assert len(backups) == 0
+
+
+def test_add_from_yaml_dry_run_does_not_modify_zone_file(tmp_path, forward_sample_zone_content, logger):
+    """With dry_run=True add_from_yaml must return 0 but leave zone files unchanged."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+    original = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "records.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: drynewhost\n"
+        "    ttl: 3600\n"
+        "    rdata: 10.99.99.99\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+    dry_config = DNSConfig(dry_run=True)
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}):
+        assert add_from_yaml(yaml_file, logger, dry_config) == 0
+
+    assert zone_file.read_text(encoding=ZONE_FILE_ENCODING) == original

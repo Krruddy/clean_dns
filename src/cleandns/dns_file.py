@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from collections import Counter, defaultdict
 
@@ -17,6 +18,25 @@ from cleandns.record_types import ARecord, AAAARecord, NSRecord, CNAMERecord, MX
     TXTRecord, RecordType, DNSClass, AbstractRecord
 
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class ZoneChanges:
+    """
+    Immutable summary of what changed (or would change, in a dry run) when a
+    zone file is processed.  Returned by DNSFile.save().
+    """
+    records_added: tuple[AbstractRecord, ...]
+    duplicates_removed: tuple[AbstractRecord, ...]
+    was_reordered: bool
+    serial_before: int | None
+    serial_after: int | None
+
+    @property
+    def has_changes(self) -> bool:
+        """True if any modifications were detected during processing."""
+        return bool(self.records_added or self.duplicates_removed or self.was_reordered)
+
 
 class DNSFile:
     """
@@ -39,6 +59,10 @@ class DNSFile:
         self.origin = None
         self.__set_DNS_records()
         self.modified = False
+        # Change-tracking: populated by add_record(), remove_duplicates(), sort()
+        self._records_added: list[AbstractRecord] = []
+        self._duplicates_removed: list[AbstractRecord] = []
+        self._was_reordered: bool = False
 
     def __set_TTL(self):
         self.ttl = None
@@ -152,25 +176,30 @@ class DNSFile:
         """
         record.omit_ttl = self.config.omit_record_ttl
         self.records[record.type].append(record)
+        self._records_added.append(record)
         self.modified = True
 
     def remove_duplicates(self):
         """
-        Removes duplicate records from the DNS file. 
+        Removes duplicate records from the DNS file.
         A record is considered a duplicate if its string representation is identical to another record of the same type.
         """
         for r_type in self.records:
             unique_records: list[AbstractRecord] = []
-            seen = set[str]()
+            removed: list[AbstractRecord] = []
+            seen: set[str] = set()
             for record in self.records[r_type]:
                 # Use the string representation as a key since records are not hashable
                 record_key = str(record)
                 if record_key not in seen:
                     seen.add(record_key)
                     unique_records.append(record)
-            
-            if len(unique_records) < len(self.records[r_type]):
+                else:
+                    removed.append(record)
+
+            if removed:
                 self.records[r_type] = unique_records
+                self._duplicates_removed.extend(removed)
                 self.modified = True
 
     def sort(self):
@@ -183,6 +212,7 @@ class DNSFile:
             if new_order != records:
                 # Update the list in-place and mark as modified
                 records[:] = new_order
+                self._was_reordered = True
                 self.modified = True
 
     @property
@@ -256,12 +286,30 @@ class DNSFile:
         # Atomic replacement: Overwrites self.path with tmp_path in one operation
         os.replace(self.__tmp_path, self.path)
 
-    def save(self):
+    def save(self) -> ZoneChanges:
         """
-        Saves the changes to the DNS file by reconstructing it and replacing the original file.
-        The original file is backed up with a timestamped name before replacement.
+        Apply pending changes to the zone file and return a summary.
+
+        If config.dry_run is True the file is left untouched; the returned
+        ZoneChanges still reflects what *would* have changed so callers can
+        display a preview to the user.
+
+        When modifications are applied the SOA serial is incremented, the file
+        is reconstructed, and the original is atomically replaced (with a
+        timestamped backup).
         """
-        if self.modified:
+        serial_before = self.soa_record.serial if self.soa_record is not None else None
+        serial_after = (serial_before + 1) if (self.modified and serial_before is not None) else serial_before
+
+        if self.modified and not self.config.dry_run:
             self.increment_serial()
             self._reconstruct_file()
             self._replace_file()
+
+        return ZoneChanges(
+            records_added=tuple(self._records_added),
+            duplicates_removed=tuple(self._duplicates_removed),
+            was_reordered=self._was_reordered,
+            serial_before=serial_before,
+            serial_after=serial_after,
+        )

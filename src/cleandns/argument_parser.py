@@ -58,6 +58,15 @@ class ArgumentParser:
             default=False,
             help="Do not output the TTL value for individual records in the reconstructed file."
         )
+        _ = self.parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            default=False,
+            help=(
+                "Show what would be changed without writing any files. "
+                "A change summary is always printed; this flag prevents the actual write."
+            ),
+        )
 
     def parse_arguments(self, args: Sequence[str] | None = None) -> ParsedArgs:
         parsed_args = self.parser.parse_args(args)
@@ -67,6 +76,7 @@ class ArgumentParser:
             human_readable=parsed_args.human_readable,
             omit_ttl=parsed_args.omit_ttl,
             omit_record_ttl=parsed_args.omit_record_ttl,
+            dry_run=parsed_args.dry_run,
         )
 
         add_from = Path(parsed_args.add_from) if parsed_args.add_from else None
