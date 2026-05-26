@@ -2,7 +2,7 @@ import pytest
 from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile
 from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
-from cleandns.exceptions import MissingSOARecordError
+from cleandns.exceptions import MissingSOARecordError, UnsupportedRecordTypeError
 from cleandns.record_types import RecordType
 
 ZONE_FILE_ENCODING = "utf-8"
@@ -118,6 +118,57 @@ def test_comments_only_file_raises_missing_soa(tmp_path, default_config):
 
     with pytest.raises(MissingSOARecordError):
         DNSFile(p, default_config)
+
+def test_unsupported_record_type_raises_error(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, default_config):
+    """A zone file containing an unsupported record type must raise UnsupportedRecordTypeError."""
+    content = (
+        f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n"
+        f"{sample_ns_block}\n"
+        "@   IN  MX  10 mail.example.com.\n"
+    )
+    p = tmp_path / "unsupported.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    with pytest.raises(UnsupportedRecordTypeError):
+        DNSFile(p, default_config)
+
+def test_unsupported_record_type_error_message_includes_type_and_count(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, default_config):
+    """UnsupportedRecordTypeError message must include the type name and the occurrence count."""
+    content = (
+        f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n"
+        f"{sample_ns_block}\n"
+        "@   IN  MX  10 mail.example.com.\n"
+        "@   IN  MX  20 mail2.example.com.\n"
+    )
+    p = tmp_path / "unsupported.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    with pytest.raises(UnsupportedRecordTypeError, match=r"MX \(2\)"):
+        DNSFile(p, default_config)
+
+def test_multiple_unsupported_record_types_all_reported(tmp_path, sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, default_config):
+    """All distinct unsupported record types must appear in one error, not just the first encountered."""
+    content = (
+        f"{sample_ttl_line}\n"
+        f"{sample_origin_line}\n"
+        f"{sample_soa_block}\n"
+        f"{sample_ns_block}\n"
+        '@   IN  MX  10 mail.example.com.\n'
+        '@   IN  TXT "v=spf1 include:example.com ~all"\n'
+    )
+    p = tmp_path / "unsupported.zone"
+    p.write_text(content, encoding=ZONE_FILE_ENCODING)
+
+    with pytest.raises(UnsupportedRecordTypeError) as exc_info:
+        DNSFile(p, default_config)
+
+    message = str(exc_info.value)
+    assert "MX" in message
+    assert "TXT" in message
 
 # --- Logic Tests ---
 

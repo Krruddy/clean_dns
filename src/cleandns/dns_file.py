@@ -1,7 +1,7 @@
 from datetime import datetime
-from collections import defaultdict
+from collections import Counter, defaultdict
 
-from cleandns.exceptions import MissingSOARecordError, MissingNSRecordError, InvalidZoneFileError, EmptyZoneFileError
+from cleandns.exceptions import MissingSOARecordError, MissingNSRecordError, InvalidZoneFileError, EmptyZoneFileError, UnsupportedRecordTypeError
 from cleandns.logger import Logger
 from cleandns.config import DNSConfig
 
@@ -84,6 +84,8 @@ class DNSFile:
             dns.rdatatype.PTR: (PTRRecord, RecordType.PTR),
         }
 
+        unsupported: Counter[str] = Counter()
+
         for name, node in zone.nodes.items():
             for rdataset in node.rdatasets:
                 for rdata in rdataset:
@@ -119,6 +121,17 @@ class DNSFile:
                                                    )
 
                         self.soa_record = current_record
+
+                    else:
+                        unsupported[dns.rdatatype.to_text(rdtype)] += 1
+
+        if unsupported:
+            details = ", ".join(
+                f"{rtype} ({count})" for rtype, count in sorted(unsupported.items())
+            )
+            raise UnsupportedRecordTypeError(
+                f"{self.path.name} contains unsupported record types: {details}"
+            )
 
         if self.soa_record is None:
             raise MissingSOARecordError(f"Missing SOA record in {self.path.name}")

@@ -13,6 +13,9 @@ class MissingNSRecordError(InvalidZoneFileError):
 class EmptyZoneFileError(InvalidZoneFileError):
     """The file contains no parseable zone content (blank, whitespace, or comments only)."""
 
+class UnsupportedRecordTypeError(InvalidZoneFileError):
+    """The zone file contains record types the tool does not support."""
+
 class NamedConfError(CleanDNSError):
     """Base for errors raised while interacting with named-checkconf."""
 
