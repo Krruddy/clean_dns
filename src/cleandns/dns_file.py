@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from collections import Counter, defaultdict
+from typing import Dict, List, Optional, Tuple
 
 from cleandns.exceptions import MissingSOARecordError, MissingNSRecordError, InvalidZoneFileError, EmptyZoneFileError, UnsupportedRecordTypeError
 from cleandns.logger import Logger
@@ -26,11 +27,11 @@ class ZoneChanges:
     Immutable summary of what changed (or would change, in a dry run) when a
     zone file is processed.  Returned by DNSFile.save().
     """
-    records_added: tuple[AbstractRecord, ...]
-    duplicates_removed: tuple[AbstractRecord, ...]
+    records_added: Tuple[AbstractRecord, ...]
+    duplicates_removed: Tuple[AbstractRecord, ...]
     was_reordered: bool
-    serial_before: int | None
-    serial_after: int | None
+    serial_before: Optional[int]
+    serial_after: Optional[int]
 
     @property
     def has_changes(self) -> bool:
@@ -44,10 +45,10 @@ class DNSFile:
     """
     path: Path
     logger: Logger
-    ttl: int | None
-    origin: str | None
-    soa_record: SOARecord | None
-    records: dict[RecordType, list[AbstractRecord]]
+    ttl: Optional[int]
+    origin: Optional[str]
+    soa_record: Optional[SOARecord]
+    records: Dict[RecordType, List[AbstractRecord]]
     modified: bool
     config: DNSConfig
 
@@ -60,8 +61,8 @@ class DNSFile:
         self.__set_DNS_records()
         self.modified = False
         # Change-tracking: populated by add_record(), remove_duplicates(), sort()
-        self._records_added: list[AbstractRecord] = []
-        self._duplicates_removed: list[AbstractRecord] = []
+        self._records_added: List[AbstractRecord] = []
+        self._duplicates_removed: List[AbstractRecord] = []
         self._was_reordered: bool = False
 
     def __set_TTL(self):
@@ -110,7 +111,7 @@ class DNSFile:
             dns.rdatatype.TXT:   (TXTRecord,   RecordType.TXT),
         }
 
-        unsupported: Counter[str] = Counter()
+        unsupported: "Counter[str]" = Counter()
 
         for name, node in zone.nodes.items():
             for rdataset in node.rdatasets:
@@ -185,9 +186,9 @@ class DNSFile:
         A record is considered a duplicate if its string representation is identical to another record of the same type.
         """
         for r_type in self.records:
-            unique_records: list[AbstractRecord] = []
-            removed: list[AbstractRecord] = []
-            seen: set[str] = set()
+            unique_records: List[AbstractRecord] = []
+            removed: List[AbstractRecord] = []
+            seen: set = set()
             for record in self.records[r_type]:
                 # Use the string representation as a key since records are not hashable
                 record_key = str(record)
@@ -268,7 +269,7 @@ class DNSFile:
             self.__tmp_path.unlink(missing_ok=True)
             raise
 
-    def _replace_file(self, backup_dir: Path | None) -> None:
+    def _replace_file(self, backup_dir: Optional[Path]) -> None:
         """
         Replaces the original DNS file with the newly reconstructed temporary file.
 
@@ -309,7 +310,7 @@ class DNSFile:
             # file.  An OSError here aborts the save cleanly with the zone file
             # unchanged.
             if self.config.no_backup:
-                backup_dir: Path | None = None
+                backup_dir: Optional[Path] = None
             elif self.config.backup_dir is not None:
                 backup_dir = self.config.backup_dir
             else:

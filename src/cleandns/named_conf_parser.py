@@ -1,6 +1,7 @@
 import re
 import subprocess
 from pathlib import Path
+from typing import Dict, Optional
 
 from cleandns.exceptions import NamedConfNotFoundError, NamedConfParseError
 
@@ -19,12 +20,12 @@ class NamedConfParser:
     """
 
     @staticmethod
-    def parse(text: str) -> dict[str, Path]:
+    def parse(text: str) -> Dict[str, Path]:
         """
         Parse the output of `named-checkconf -p` and return a mapping of
         zone name to zone file path for all master/primary zones.
         """
-        zones: dict[str, Path] = {}
+        zones: Dict[str, Path] = {}
         lines = text.splitlines()
         i = 0
 
@@ -33,8 +34,8 @@ class NamedConfParser:
 
             if zone_match:
                 zone_name = zone_match.group(1)
-                zone_type: str | None = None
-                zone_file: str | None = None
+                zone_type: Optional[str] = None
+                zone_file: Optional[str] = None
 
                 # Depth starts at the brace count of the zone declaration line.
                 depth = lines[i].count("{") - lines[i].count("}")
@@ -63,7 +64,7 @@ class NamedConfParser:
         return zones
 
     @classmethod
-    def from_system(cls) -> dict[str, Path]:
+    def from_system(cls) -> Dict[str, Path]:
         """
         Run `named-checkconf -p` and return the parsed zone mapping.
         Raises NamedConfNotFoundError if named-checkconf is not on PATH.

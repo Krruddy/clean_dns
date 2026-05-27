@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Type
 
 import yaml
 
@@ -12,7 +13,7 @@ from cleandns.record_types import (
 _DEFAULT_TTL = 3600
 
 # Maps the type string from YAML to (record class, RecordType enum value).
-_RECORD_TYPES: dict[str, tuple[type[AbstractRecord], RecordType]] = {
+_RECORD_TYPES: Dict[str, Tuple[Type[AbstractRecord], RecordType]] = {
     "A":     (ARecord,     RecordType.A),
     "AAAA":  (AAAARecord,  RecordType.AAAA),
     "NS":    (NSRecord,    RecordType.NS),
@@ -49,8 +50,8 @@ class YAMLFormat(ABC):
         data: object,
         filename: str,
         default_ttl: int,
-        zone_map: dict[str, Path] | None = None,
-    ) -> dict[str, list[AbstractRecord]]:
+        zone_map: Optional[Dict[str, Path]] = None,
+    ) -> Dict[str, List[AbstractRecord]]:
         """
         Parse *data* and return a mapping of zone name to the list of records
         to add to that zone.  Raise InvalidYAMLError on any validation failure.
@@ -85,14 +86,14 @@ class StandardFormat(YAMLFormat):
         data: object,
         filename: str,
         default_ttl: int,
-        zone_map: dict[str, Path] | None = None,
-    ) -> dict[str, list[AbstractRecord]]:
+        zone_map: Optional[Dict[str, Path]] = None,
+    ) -> Dict[str, List[AbstractRecord]]:
         if not isinstance(data, dict):
             raise InvalidYAMLError(
                 f"'{filename}': top-level structure must be a mapping of zone names to record lists."
             )
 
-        result: dict[str, list[AbstractRecord]] = {}
+        result: Dict[str, List[AbstractRecord]] = {}
         for zone_name, record_list in data.items():
             if not isinstance(record_list, list):
                 raise InvalidYAMLError(
@@ -130,14 +131,14 @@ class DNSEntriesFormat(YAMLFormat):
         data: object,
         filename: str,
         default_ttl: int,
-        zone_map: dict[str, Path] | None = None,
-    ) -> dict[str, list[AbstractRecord]]:
+        zone_map: Optional[Dict[str, Path]] = None,
+    ) -> Dict[str, List[AbstractRecord]]:
         if not isinstance(data, dict) or not isinstance(data.get("dnsEntries"), list):
             raise InvalidYAMLError(
                 f"'{filename}': 'dnsEntries' must be a list."
             )
 
-        result: dict[str, list[AbstractRecord]] = {}
+        result: Dict[str, List[AbstractRecord]] = {}
 
         for entry in data["dnsEntries"]:
             if not isinstance(entry, dict):
@@ -174,7 +175,7 @@ class DNSEntriesFormat(YAMLFormat):
 
 # Formats are tried in declaration order; more specific formats must come
 # before the StandardFormat fallback.
-_FORMATS: list[type[YAMLFormat]] = [DNSEntriesFormat, StandardFormat]
+_FORMATS: List[Type[YAMLFormat]] = [DNSEntriesFormat, StandardFormat]
 
 
 class YAMLRecordLoader:
@@ -190,8 +191,8 @@ class YAMLRecordLoader:
     def load(
         path: Path,
         default_ttl: int = _DEFAULT_TTL,
-        zone_map: dict[str, Path] | None = None,
-    ) -> dict[str, list[AbstractRecord]]:
+        zone_map: Optional[Dict[str, Path]] = None,
+    ) -> Dict[str, List[AbstractRecord]]:
         """
         Parse the YAML file at *path* and return a mapping of zone name to
         the list of records to add to that zone.  The format is auto-detected.
@@ -274,8 +275,8 @@ def _build_record(
 def _resolve_fqdn(
     fqdn: str,
     filename: str,
-    zone_map: dict[str, Path] | None,
-) -> tuple[str, str]:
+    zone_map: Optional[Dict[str, Path]],
+) -> Tuple[str, str]:
     """
     Resolve an FQDN to (name, zone).
 

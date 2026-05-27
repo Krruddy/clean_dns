@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -14,5 +15,5 @@ class DNSConfig:
     # backup_dir: explicit directory for backups; None means use the default
     #             ('backups/' subdirectory next to each zone file).
     # no_backup:  skip backup creation entirely (for external backup workflows).
-    backup_dir: Path | None = None
+    backup_dir: Optional[Path] = None
     no_backup: bool = False

@@ -1,7 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import override
 
 
 class RecordType(Enum):
@@ -28,7 +27,6 @@ class AbstractRecord(ABC):
     class_: DNSClass
     omit_ttl: bool = field(compare=False)
 
-    @override
     def __str__(self) -> str:
         """
         Returns the record in the standard DNS zone file format (BIND format).
@@ -63,7 +61,6 @@ class SOARecord(AbstractRecord):
     minimum: int
     human_readable: bool = field(default=False, compare=False)
 
-    @override
     def __str__(self) -> str:
         if self.human_readable:
             refresh = self._format_time(self.refresh)
@@ -144,7 +141,6 @@ class MXRecord(AbstractRecord):
     Sorted by preference (ascending), then by exchange name.
     """
 
-    @override
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, MXRecord):
             return super().__lt__(other)
@@ -168,7 +164,6 @@ class PTRRecord(AbstractRecord):
     Represents a Pointer (PTR) DNS record, which maps an IP address to a hostname.
     """
 
-    @override
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, PTRRecord):
             return super().__lt__(other)

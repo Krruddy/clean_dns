@@ -1,6 +1,8 @@
 import subprocess
 import sys
 from pathlib import Path
+from typing import List, Optional
+
 from cleandns.argument_parser import ArgumentParser
 from cleandns.config import DNSConfig
 from cleandns.dns_file import DNSFile, ZoneChanges
@@ -13,7 +15,7 @@ from cleandns.exceptions import (
 )
 
 
-def _rndc_reload(zone_name: str | None, logger: Logger) -> bool:
+def _rndc_reload(zone_name: Optional[str], logger: Logger) -> bool:
     """
     Run `rndc reload [zone_name]`. Returns True on success, False on failure.
     When zone_name is None, reloads all zones.
@@ -46,7 +48,7 @@ def _log_changes(changes: ZoneChanges, logger: Logger, label: str, dry_run: bool
         logger.info(f"{tag}{label}: no changes")
         return
 
-    parts: list[str] = []
+    parts: List[str] = []
     if changes.records_added:
         record_strs = ", ".join(f"{r.name} ({r.type.value})" for r in changes.records_added)
         parts.append(f"added {len(changes.records_added)} record(s): {record_strs}")
@@ -127,7 +129,7 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
         )
         return 1
 
-    failed_zones: list[str] = []
+    failed_zones: List[str] = []
 
     for zone_name, records in records_by_zone.items():
         file_path = zone_map[zone_name]
@@ -179,7 +181,7 @@ def main():
         return 0
 
     files_to_process = [Path(f) for f in parsed.files]
-    failed_files: list[str] = []
+    failed_files: List[str] = []
 
     # Process files sequentially
     for file_path in files_to_process:

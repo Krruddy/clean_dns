@@ -2,6 +2,7 @@ import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List, Optional
 
 from cleandns.config import DNSConfig
 
@@ -9,8 +10,8 @@ from cleandns.config import DNSConfig
 @dataclass(frozen=True)
 class ParsedArgs:
     config: DNSConfig
-    files: list[str]
-    add_from: Path | None
+    files: List[str]
+    add_from: Optional[Path]
 
 
 class ArgumentParser:
@@ -96,7 +97,7 @@ class ArgumentParser:
             help="Disable backup creation. Use when backups are managed externally.",
         )
 
-    def parse_arguments(self, args: Sequence[str] | None = None) -> ParsedArgs:
+    def parse_arguments(self, args: Optional[Sequence[str]] = None) -> ParsedArgs:
         parsed_args = self.parser.parse_args(args)
 
         backup_dir = Path(parsed_args.backup_dir) if parsed_args.backup_dir else None

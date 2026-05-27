@@ -1,5 +1,5 @@
 import logging
-from typing import override
+from typing import Dict
 
 
 class LoggerMeta(type):
@@ -48,13 +48,12 @@ class Logger(metaclass=LoggerMeta):
 
 
 class CustomFormatter(logging.Formatter):
-    FORMATS: dict[int, str] = {
+    FORMATS: Dict[int, str] = {
         logging.INFO: "[+] %(message)s",
         logging.WARNING: "[!] %(message)s",
         logging.ERROR: "[-] %(message)s",
     }
 
-    @override
     def format(self, record: logging.LogRecord) -> str:
         formatter = logging.Formatter(self.FORMATS.get(record.levelno, "%(message)s"))
         return formatter.format(record)
