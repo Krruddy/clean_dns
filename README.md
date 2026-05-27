@@ -18,13 +18,15 @@ Supported record types: **A, AAAA, CNAME, MX, NS, PTR, TXT**.
 
 ## Requirements
 
-- Python ≥ 3.12
-- [dnspython](https://www.dnspython.org/) ≥ 2.0
+- Python ≥ 3.8
+- [dnspython](https://www.dnspython.org/) ≥ 2.0 (< 2.6 for Python 3.8)
 - [PyYAML](https://pyyaml.org/) ≥ 6.0
 - BIND9 (`named-checkconf`) must be on PATH when using `--add-from`
 - BIND9 (`rndc`) must be on PATH when using `--reload`
 
 ## Installation
+
+### Standard installation (internet-connected)
 
 ```bash
 python -m venv venv
@@ -32,6 +34,19 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install --editable .
 ```
+
+### Air-gapped installation (offline environments)
+
+The `vendor/` directory contains pre-downloaded wheel files for all Python dependencies, allowing installation without internet access:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install --no-index --find-links vendor -e .
+```
+
+**Note:** The vendored wheels are built for Python 3.8 on Linux x86_64. For other platforms or Python versions, download the appropriate wheels and place them in the `vendor/` directory before installation.
 
 ## Usage
 
