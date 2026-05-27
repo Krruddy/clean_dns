@@ -31,7 +31,6 @@ Supported record types: **A, AAAA, CNAME, MX, NS, PTR, TXT**.
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install --upgrade pip
 pip install --editable .
 ```
 
