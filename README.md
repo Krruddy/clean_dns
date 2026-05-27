@@ -37,16 +37,41 @@ pip install --editable .
 
 ### Air-gapped installation (offline environments)
 
-The `vendor/` directory contains pre-downloaded wheel files for all Python dependencies, allowing installation without internet access:
+The `vendor/` directory contains pre-downloaded wheel files for all Python dependencies, allowing installation without internet access.
+
+**Prerequisites:**
+- Python 3.8+ installed on the system
+- The entire project directory (including `vendor/`) copied to the air-gapped system
+
+**Installation steps:**
 
 ```bash
+# Create a virtual environment
 python -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install all dependencies from the vendor directory
 pip install --no-index --find-links vendor -e .
 ```
 
-**Note:** The vendored wheels are built for Python 3.8 on Linux x86_64. For other platforms or Python versions, download the appropriate wheels and place them in the `vendor/` directory before installation.
+**Platform compatibility:**
+
+The vendored wheels are pre-downloaded for **Python 3.8 on Linux x86_64**. For other platforms or Python versions:
+
+1. On an internet-connected system with the target Python version:
+   ```bash
+   pip download --dest vendor --python-version 3.X --platform PLATFORM \
+     "dnspython>=2.0,<2.6" "PyYAML>=6.0"
+   ```
+2. Copy the updated `vendor/` directory to the air-gapped system
+3. Follow the installation steps above
+
+**Troubleshooting:**
+
+If you encounter wheel compatibility errors, ensure:
+- The Python version matches (the vendored wheels are for Python 3.8)
+- The platform matches (Linux x86_64)
+- All required `.whl` files are present in the `vendor/` directory
 
 ## Usage
 
