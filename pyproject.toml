@@ -5,7 +5,8 @@ description = "The purpose of this project is to use Python to manage Domain Nam
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "dnspython>=2.0",
+    "dnspython>=2.0,<2.6; python_version<'3.9'",
+    "dnspython>=2.0; python_version>='3.9'",
     "PyYAML>=6.0",
 ]
 
