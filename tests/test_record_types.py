@@ -39,16 +39,40 @@ def test_record_str_ttl_visibility(omit_ttl, present):
 
 def test_record_lt_by_name():
     """Records with different names sort alphabetically."""
-    assert make_a_record(name="alpha") < make_a_record(name="beta")
+    assert make_txt_record(name="alpha") < make_txt_record(name="beta")
 
 def test_record_lt_case_insensitive():
     """Name comparison ignores case: AAA < bbb < zzz."""
-    records = [make_a_record(name=n) for n in ["zzz", "AAA", "bbb"]]
+    records = [make_txt_record(name=n) for n in ["zzz", "AAA", "bbb"]]
     assert [r.name for r in sorted(records)] == ["AAA", "bbb", "zzz"]
 
 def test_record_lt_rdata_as_tiebreak():
     """Records with the same name sort by rdata."""
-    assert make_a_record(name="host", rdata="1.1.1.1") < make_a_record(name="host", rdata="2.2.2.2")
+    assert make_txt_record(name="host", rdata="aaa") < make_txt_record(name="host", rdata="zzz")
+
+
+# --- ARecord.__lt__ ---
+
+def test_a_record_lt_by_first_octet():
+    """A records sort by first octet numerically."""
+    assert make_a_record(rdata="1.0.0.1") < make_a_record(rdata="2.0.0.1")
+
+def test_a_record_lt_by_last_octet():
+    """Last octet is the final tiebreaker."""
+    assert make_a_record(rdata="10.0.0.1") < make_a_record(rdata="10.0.0.2")
+
+def test_a_record_lt_numeric_not_lexicographic():
+    """Octet comparison is numeric: 9 < 10, not lexicographic '10' < '9'."""
+    records = [make_a_record(rdata=f"10.0.0.{n}") for n in [10, 9, 2]]
+    assert [r.rdata for r in sorted(records)] == ["10.0.0.2", "10.0.0.9", "10.0.0.10"]
+
+def test_a_record_lt_name_as_tiebreak():
+    """A records with identical IPs fall back to name comparison."""
+    assert make_a_record(name="alpha", rdata="1.1.1.1") < make_a_record(name="beta", rdata="1.1.1.1")
+
+def test_a_record_lt_falls_back_for_non_a():
+    """ARecord compared against a non-ARecord falls back to AbstractRecord.__lt__."""
+    assert make_a_record(name="alpha") < make_mx_record(name="beta")
 
 
 # --- PTRRecord.__lt__ ---

@@ -124,7 +124,14 @@ class NSRecord(AbstractRecord):
 
 @dataclass
 class ARecord(AbstractRecord):
-    pass
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, ARecord):
+            return super().__lt__(other)
+        self_octets = [int(b) for b in self.rdata.split('.')]
+        other_octets = [int(b) for b in other.rdata.split('.')]
+        if self_octets != other_octets:
+            return self_octets < other_octets
+        return self.name.lower() < other.name.lower()
 
 @dataclass
 class AAAARecord(AbstractRecord):
@@ -170,9 +177,7 @@ class PTRRecord(AbstractRecord):
         
         def sort_key(name: str):
             parts = name.split('.')
-            
-            parts.reverse() 
-            
+            parts.reverse()
             return [
                 (0, int(part)) if part.isdigit() else (1, part.lower())
                 for part in parts
