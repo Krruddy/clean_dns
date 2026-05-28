@@ -111,6 +111,11 @@ def forward_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_
     return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n{simple_sample_aaaa_records_block}\n{simple_sample_cname_records_block}\n"
 
 @pytest.fixture
+def no_origin_zone_content(sample_ttl_line, sample_soa_block, sample_ns_block, simple_sample_a_records_block):
+    """Forward zone without a $ORIGIN directive — origin must be supplied externally."""
+    return f"{sample_ttl_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_a_records_block}\n"
+
+@pytest.fixture
 def reverse_sample_zone_content(sample_ttl_line, sample_origin_line, sample_soa_block, sample_ns_block, simple_sample_ptr_records_block):
     return f"{sample_ttl_line}\n{sample_origin_line}\n{sample_soa_block}\n\n{sample_ns_block}\n{simple_sample_ptr_records_block}\n"
 
@@ -124,13 +129,28 @@ def complex_forward_zone_content(sample_ttl_line, sample_origin_line, sample_soa
 
 @pytest.fixture
 def expected_sorted_a_names():
-    """Returns the expected order of names from the complex A block after alphabetical sorting."""
+    """Returns the expected order of names from the complex A block after IP-address sorting."""
     return [
-        "auth-ldap-01", "backup-svr-01", "cicd-runner-01", "db-primary-01",
-        "db-replica-01", "db-replica-02", "imap-store-01", "jump-host-01",
-        "k8s-master-01", "k8s-worker-01", "monitor-01", "pop-gw-01", "redis-cache-01",
-        "redis-cache-02", "smtp-relay-01", "web-prod-01", "web-prod-02", "web-prod-03",
-        "web-prod-04", "web-prod-05"
+        "jump-host-01",   # 10.0.0.254
+        "db-primary-01",  # 10.0.5.50
+        "db-replica-01",  # 10.0.5.51
+        "db-replica-02",  # 10.0.5.52
+        "redis-cache-02", # 10.1.1.1
+        "web-prod-02",    # 10.2.40.5
+        "auth-ldap-01",   # 10.5.0.2
+        "k8s-master-01",  # 10.8.8.8
+        "k8s-worker-01",  # 10.8.8.20
+        "web-prod-05",    # 10.10.10.10
+        "imap-store-01",  # 10.15.0.20
+        "smtp-relay-01",  # 10.15.0.99
+        "pop-gw-01",      # 10.15.100.5
+        "cicd-runner-01", # 10.45.60.70
+        "web-prod-04",    # 10.50.3.1
+        "backup-svr-01",  # 10.99.99.99
+        "web-prod-01",    # 10.100.5.20
+        "monitor-01",     # 10.120.50.30
+        "web-prod-03",    # 10.200.1.10
+        "redis-cache-01", # 10.255.255.1
     ]
 
 @pytest.fixture

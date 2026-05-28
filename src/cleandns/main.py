@@ -62,7 +62,7 @@ def _log_changes(changes: ZoneChanges, logger: Logger, label: str, dry_run: bool
     logger.info(f"{tag}{label}: {'; '.join(parts)}")
 
 
-def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
+def process_file(file_path: Path, logger: Logger, config: DNSConfig, origin: Optional[str] = None) -> int:
     """
     Process a single DNS file. Returns 0 on success, 1 on failure.
     """
@@ -71,7 +71,7 @@ def process_file(file_path: Path, logger: Logger, config: DNSConfig) -> int:
         return 1
 
     try:
-        dns_file = DNSFile(file_path, config)
+        dns_file = DNSFile(file_path, config, origin=origin)
         dns_file.remove_duplicates()
         dns_file.sort()
         changes = dns_file.save()
@@ -134,7 +134,7 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
     for zone_name, records in records_by_zone.items():
         file_path = zone_map[zone_name]
         try:
-            dns_file = DNSFile(file_path, config)
+            dns_file = DNSFile(file_path, config, origin=zone_name)
             for record in records:
                 dns_file.add_record(record)
             dns_file.remove_duplicates()
@@ -183,9 +183,18 @@ def main():
     files_to_process = [Path(f) for f in parsed.files]
     failed_files: List[str] = []
 
-    # Process files sequentially
+    # Best-effort origin lookup: silently skip if named-checkconf is unavailable
+    # or if the file is not managed by BIND.
+    file_to_zone: dict = {}
+    try:
+        zone_map = NamedConfParser.from_system()
+        file_to_zone = {str(p.resolve()): name for name, p in zone_map.items()}
+    except NamedConfError:
+        pass
+
     for file_path in files_to_process:
-        if process_file(file_path, logger, parsed.config) != 0:
+        origin = file_to_zone.get(str(file_path.resolve()))
+        if process_file(file_path, logger, parsed.config, origin=origin) != 0:
             failed_files.append(file_path.name)
 
     if failed_files:

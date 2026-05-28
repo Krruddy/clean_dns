@@ -640,3 +640,45 @@ def test_backup_dir_creation_failure_raises_before_write(zone_file):
 
     # The zone file must be completely unchanged
     assert zone_file.read_text(encoding=ZONE_FILE_ENCODING) == original_content
+
+
+# ---------------------------------------------------------------------------
+# Explicit origin (zone files without $ORIGIN)
+# ---------------------------------------------------------------------------
+
+def test_explicit_origin_is_set_on_dns_file(tmp_path, no_origin_zone_content):
+    """DNSFile.origin is populated from the explicit origin when the file has no $ORIGIN."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(no_origin_zone_content, encoding=ZONE_FILE_ENCODING)
+    dns = DNSFile(zone_file, DNSConfig(), origin="example.com")
+    assert dns.origin is not None
+    assert "example.com" in dns.origin
+
+
+def test_explicit_origin_written_to_output(tmp_path, no_origin_zone_content):
+    """$ORIGIN appears in the rewritten file when origin was supplied externally."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(no_origin_zone_content, encoding=ZONE_FILE_ENCODING)
+    dns = DNSFile(zone_file, DNSConfig(), origin="example.com")
+    dns.add_record(ARecord(name="new", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="192.168.1.99", omit_ttl=False))
+    dns.save()
+    output = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+    assert "$ORIGIN" in output
+    assert "example.com." in output
+
+
+def test_explicit_origin_consistent_with_file_origin(tmp_path, forward_sample_zone_content):
+    """Passing an explicit origin that matches the file's $ORIGIN is accepted."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+    dns = DNSFile(zone_file, DNSConfig(), origin="example.com")
+    assert dns.origin is not None
+    assert "example.com" in dns.origin
+
+
+def test_no_origin_file_without_explicit_origin_raises(tmp_path, no_origin_zone_content):
+    """Parsing a file with no $ORIGIN and no explicit origin raises InvalidZoneFileError."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(no_origin_zone_content, encoding=ZONE_FILE_ENCODING)
+    with pytest.raises(InvalidZoneFileError):
+        DNSFile(zone_file, DNSConfig())

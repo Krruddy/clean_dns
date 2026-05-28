@@ -108,7 +108,8 @@ class StandardFormat(YAMLFormat):
 
 class DNSEntriesFormat(YAMLFormat):
     """
-    IP/FQDN shorthand format (A records only):
+    IP/FQDN shorthand format.  Creates an A record in the forward zone and,
+    when a matching reverse zone is present in zone_map, a PTR record too:
 
         dnsEntries:
           - ip: 10.10.100.123
@@ -116,9 +117,14 @@ class DNSEntriesFormat(YAMLFormat):
           - ip: 10.10.100.124
             fqdn: host4.example.com
 
-    The zone is derived by stripping the first label from the FQDN:
+    The forward zone is derived by stripping the first label from the FQDN:
       host3.example.com   → zone 'example.com',     name 'host3'
       web.sub.example.com → zone 'sub.example.com', name 'web'
+
+    The reverse zone is found via longest-prefix matching against zone_map
+    (e.g. 192.168.1.10 → '1.168.192.in-addr.arpa' if that zone is known).
+    PTR records are only added when zone_map is provided and contains a
+    matching reverse zone; they are silently skipped otherwise.
     """
 
     @classmethod
@@ -169,6 +175,12 @@ class DNSEntriesFormat(YAMLFormat):
                 omit_ttl=False,
             )
             result.setdefault(zone, []).append(record)
+
+            if zone_map is not None:
+                ptr = _build_ptr_entry(str(ip), str(fqdn_raw), zone_map, default_ttl)
+                if ptr is not None:
+                    reverse_zone, ptr_record = ptr
+                    result.setdefault(reverse_zone, []).append(ptr_record)
 
         return result
 
@@ -270,6 +282,49 @@ def _build_record(
         rdata=str(rdata),
         omit_ttl=False,  # updated by DNSFile.add_record() to match config
     )
+
+
+def _build_ptr_entry(
+    ip: str,
+    fqdn: str,
+    zone_map: Dict[str, Path],
+    default_ttl: int,
+) -> Optional[Tuple[str, PTRRecord]]:
+    """
+    Return (reverse_zone_name, PTRRecord) for an IPv4 address, or None if the
+    IP is not a valid IPv4 address or no reverse zone in zone_map matches.
+
+    Uses longest-prefix matching: a /24 reverse zone is preferred over a /16,
+    which is preferred over a /8.
+    """
+    parts = ip.split('.')
+    if len(parts) != 4:
+        return None
+    try:
+        int_parts = [int(p) for p in parts]
+    except ValueError:
+        return None
+    if not all(0 <= v <= 255 for v in int_parts):
+        return None
+
+    reversed_parts = parts[::-1]   # ['10', '1', '168', '192'] for 192.168.1.10
+    ptr_rdata = fqdn if fqdn.endswith('.') else fqdn + '.'
+
+    # i = number of octets that become the record name inside the zone.
+    # i=1 → zone has 3 octets (/24, most specific); i=3 → zone has 1 octet (/8).
+    for i in range(1, len(reversed_parts)):
+        zone_candidate = '.'.join(reversed_parts[i:]) + '.in-addr.arpa'
+        if zone_candidate in zone_map:
+            return (zone_candidate, PTRRecord(
+                name='.'.join(reversed_parts[:i]),
+                ttl=default_ttl,
+                class_=DNSClass.IN,
+                type=RecordType.PTR,
+                rdata=ptr_rdata,
+                omit_ttl=False,
+            ))
+
+    return None
 
 
 def _resolve_fqdn(

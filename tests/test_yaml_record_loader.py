@@ -412,3 +412,108 @@ dnsEntries:
     zone_map = {"example.com": Path("/etc/bind/example.com.zone")}
     with pytest.raises(InvalidYAMLError, match="does not match any known zone"):
         YAMLRecordLoader.load(p, zone_map=zone_map)
+
+
+# ---------------------------------------------------------------------------
+# DNSEntriesFormat — PTR record generation
+# ---------------------------------------------------------------------------
+
+def test_dns_entries_generates_ptr_when_reverse_zone_known(tmp_path):
+    """A PTR record is added to the reverse zone when it is present in zone_map."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 192.168.1.10
+    fqdn: www.example.com
+""")
+    zone_map = {
+        "example.com":              Path("/etc/bind/example.com.zone"),
+        "1.168.192.in-addr.arpa":   Path("/etc/bind/1.168.192.in-addr.arpa.zone"),
+    }
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+
+    assert "example.com" in result
+    assert result["example.com"][0].name == "www"
+
+    assert "1.168.192.in-addr.arpa" in result
+    ptr = result["1.168.192.in-addr.arpa"][0]
+    assert isinstance(ptr, PTRRecord)
+    assert ptr.name == "10"
+    assert ptr.rdata == "www.example.com."
+
+
+def test_dns_entries_no_ptr_when_zone_map_is_none(tmp_path):
+    """No PTR record is generated when zone_map is not provided."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 192.168.1.10
+    fqdn: www.example.com
+""")
+    result = YAMLRecordLoader.load(p)
+    assert len(result) == 1
+    assert "1.168.192.in-addr.arpa" not in result
+
+
+def test_dns_entries_no_ptr_when_reverse_zone_absent(tmp_path):
+    """No PTR record is generated when the reverse zone is not in zone_map."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 192.168.1.10
+    fqdn: www.example.com
+""")
+    zone_map = {"example.com": Path("/etc/bind/example.com.zone")}
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    assert len(result) == 1
+    assert "1.168.192.in-addr.arpa" not in result
+
+
+def test_dns_entries_ptr_uses_slash16_zone_when_no_slash24(tmp_path):
+    """Falls back to a /16 reverse zone when no /24 zone is known."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 192.168.1.10
+    fqdn: www.example.com
+""")
+    zone_map = {
+        "example.com":            Path("/etc/bind/example.com.zone"),
+        "168.192.in-addr.arpa":   Path("/etc/bind/168.192.in-addr.arpa.zone"),
+    }
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    assert "168.192.in-addr.arpa" in result
+    ptr = result["168.192.in-addr.arpa"][0]
+    assert ptr.name == "10.1"
+    assert ptr.rdata == "www.example.com."
+
+
+def test_dns_entries_ptr_prefers_slash24_over_slash16(tmp_path):
+    """The most specific reverse zone (/24 over /16) wins."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 192.168.1.10
+    fqdn: www.example.com
+""")
+    zone_map = {
+        "example.com":              Path("/etc/bind/example.com.zone"),
+        "1.168.192.in-addr.arpa":   Path("/etc/bind/1.168.192.in-addr.arpa.zone"),
+        "168.192.in-addr.arpa":     Path("/etc/bind/168.192.in-addr.arpa.zone"),
+    }
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    assert "1.168.192.in-addr.arpa" in result
+    assert result["1.168.192.in-addr.arpa"][0].name == "10"
+    assert "168.192.in-addr.arpa" not in result
+
+
+def test_dns_entries_ptr_fqdn_trailing_dot_normalised(tmp_path):
+    """The PTR rdata always ends with a dot regardless of how the fqdn was written."""
+    p = write_yaml(tmp_path, """\
+dnsEntries:
+  - ip: 10.0.0.1
+    fqdn: host.example.com.
+""")
+    zone_map = {
+        "example.com":          Path("/etc/bind/example.com.zone"),
+        "0.10.in-addr.arpa":    Path("/etc/bind/0.10.in-addr.arpa.zone"),
+    }
+    result = YAMLRecordLoader.load(p, zone_map=zone_map)
+    ptr = result["0.10.in-addr.arpa"][0]
+    assert ptr.rdata == "host.example.com."
+    assert ptr.name == "1.0"

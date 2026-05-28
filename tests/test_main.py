@@ -263,11 +263,11 @@ def test_process_file_reload_calls_rndc_when_changes_applied(
 
 
 def test_process_file_reload_not_called_when_no_changes(
-    tmp_path, forward_sample_zone_content, logger
+    tmp_path, complex_forward_zone_content, logger
 ):
     """With reload=True, rndc must NOT be called when the zone needed no changes."""
     p = tmp_path / "example.com.zone"
-    p.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+    p.write_text(complex_forward_zone_content, encoding=ZONE_FILE_ENCODING)
 
     # First pass — bring the file into its final sorted, deduped form so the
     # second pass genuinely has nothing to change.

@@ -10,6 +10,7 @@ from cleandns.config import DNSConfig
 import os
 import shutil
 import dns.exception
+import dns.name
 import dns.zone
 import dns.rdataclass
 import dns.ttl
@@ -52,10 +53,11 @@ class DNSFile:
     modified: bool
     config: DNSConfig
 
-    def __init__(self, path: Path, config: DNSConfig) -> None:
+    def __init__(self, path: Path, config: DNSConfig, origin: Optional[str] = None) -> None:
         self.logger = Logger()
         self.config = config
         self.path = path
+        self._explicit_origin = origin
         self.__set_TTL()
         self.origin = None
         self.__set_DNS_records()
@@ -88,8 +90,15 @@ class DNSFile:
         if not file_content.strip():
             raise EmptyZoneFileError(f"Zone file {self.path.name} is empty or contains only whitespace.")
 
+        origin_name: Optional[dns.name.Name] = None
+        if self._explicit_origin:
+            normalized = self._explicit_origin
+            if not normalized.endswith('.'):
+                normalized = normalized + '.'
+            origin_name = dns.name.from_text(normalized)
+
         try:
-            zone = dns.zone.from_text(file_content)
+            zone = dns.zone.from_text(file_content, origin=origin_name)
         except dns.zone.NoSOA as e:
             raise MissingSOARecordError(f"Missing SOA record in {self.path.name}") from e
         except dns.zone.NoNS as e:
