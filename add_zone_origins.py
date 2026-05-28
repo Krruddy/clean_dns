@@ -49,7 +49,7 @@ def _extract_block(text: str, open_brace: int) -> str:
 
 def parse_zones(config: str) -> List[Zone]:
     zones: List[Zone] = []
-    zone_header_re = re.compile(r'zone\s+"([^"]+)"\s+\w+\s*\{', re.IGNORECASE)
+    zone_header_re = re.compile(r'zone\s+"([^"]+)"\s+(?:\w+\s*)?\{', re.IGNORECASE)
 
     for m in zone_header_re.finditer(config):
         block = _extract_block(config, m.end() - 1)
@@ -67,7 +67,7 @@ def parse_zones(config: str) -> List[Zone]:
 def prepend_origin(zone: Zone) -> None:
     path = Path(zone.file)
     try:
-        content = path.read_text()
+        content = path.read_text(encoding='utf-8')
     except OSError as exc:
         print(f"  ERROR  {zone.name}: cannot read {zone.file}: {exc}", file=sys.stderr)
         return
@@ -81,7 +81,7 @@ def prepend_origin(zone: Zone) -> None:
     try:
         fd, tmp_path = tempfile.mkstemp(dir=path.parent)
         try:
-            with os.fdopen(fd, 'w') as fh:
+            with os.fdopen(fd, 'w', encoding='utf-8') as fh:
                 fh.write(new_content)
             os.chmod(tmp_path, path.stat().st_mode)
             os.replace(tmp_path, path)
