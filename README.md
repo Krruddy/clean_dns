@@ -1,15 +1,16 @@
 # clean-dns
 
 A command-line tool for managing BIND9 DNS zone files.  It removes
-duplicate records, sorts records into a predictable order, and can add
-new records from a YAML file.  Every modification atomically replaces the
-zone file (with a timestamped backup) and increments the SOA serial.
+duplicate records, sorts records into a predictable order, and can add or
+remove records from a YAML file.  Every modification atomically replaces
+the zone file (with a timestamped backup) and increments the SOA serial.
 
 ## Features
 
 - **Deduplication** — removes duplicate records within a zone
 - **Sorting** — alphabetical for A/AAAA/CNAME/NS/TXT, numeric for PTR, priority-then-exchange for MX
 - **Add records** — append new records from a YAML file; zone files are discovered automatically via `named-checkconf`
+- **Remove records** — delete specific records from a YAML file using the same format as add
 - **Dry-run** — preview what would change without writing anything
 - **Change summary** — always printed, whether or not changes are applied
 - **BIND reload** — optionally trigger `rndc reload` after a successful write
@@ -21,7 +22,7 @@ Supported record types: **A, AAAA, CNAME, MX, NS, PTR, TXT**.
 - Python ≥ 3.8
 - [dnspython](https://www.dnspython.org/) ≥ 2.0 (< 2.6 for Python 3.8)
 - [PyYAML](https://pyyaml.org/) ≥ 6.0
-- BIND9 (`named-checkconf`) must be on PATH when using `--add-from`
+- BIND9 (`named-checkconf`) must be on PATH when using `--add-from` or `--remove-from`
 - BIND9 (`rndc`) must be on PATH when using `--reload`
 
 ## Installation
@@ -93,11 +94,24 @@ cleandns --add-from records.yaml
 Zone files are discovered automatically by running `named-checkconf -p`.
 Only `master`/`primary` zones are considered.
 
+### Remove records from a YAML file
+
+```bash
+cleandns --remove-from records.yaml
+```
+
+Uses the same YAML formats as `--add-from`.  Zone files are discovered via
+`named-checkconf -p`.  Records are matched by **type, name, and rdata**
+(TTL is ignored).  A record listed in the YAML that does not exist in the
+zone produces a warning but does not cause the command to fail, so the
+operation is safe to run more than once.
+
 ### Preview changes without writing
 
 ```bash
 cleandns --dry-run --files /etc/bind/example.com.zone
 cleandns --dry-run --add-from records.yaml
+cleandns --dry-run --remove-from records.yaml
 ```
 
 Prints a change summary prefixed with `[DRY RUN]` and exits without
@@ -108,6 +122,7 @@ modifying any file or creating any backup.
 ```bash
 cleandns --reload --files /etc/bind/example.com.zone
 cleandns --reload --add-from records.yaml
+cleandns --reload --remove-from records.yaml
 ```
 
 Runs `rndc reload <zone>` after each zone file is successfully written.
@@ -119,7 +134,8 @@ confident the changes are correct.  Has no effect with `--dry-run`.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-f` / `--files FILE …` | — | One or more zone files to process |
-| `--add-from YAML` | — | YAML file with records to add (mutually exclusive with `--files`) |
+| `--add-from YAML` | — | YAML file with records to add (mutually exclusive with `--files` and `--remove-from`) |
+| `--remove-from YAML` | — | YAML file with records to remove (mutually exclusive with `--files` and `--add-from`) |
 | `--dry-run` | off | Show what would change without writing |
 | `--reload` | off | Run `rndc reload` after each successful write |
 | `--backup-dir DIR` | `backups/` next to each zone file | Directory where timestamped backups are stored |
@@ -194,7 +210,7 @@ dnsEntries:
 | **Comments are not preserved** | dnspython discards comments when parsing. Every file that is rewritten will lose any inline comments. |
 | **Unsupported record types block processing** | A zone file containing types not in the supported list (e.g. SRV, CAA, SSHFP) will be rejected entirely. |
 | **Backup files accumulate** | There is no automatic cleanup of timestamped backup files within the backup directory. |
-| **Default TTL mismatch on add** | When using `--add-from` and a record in the YAML omits its `ttl`, the fallback is 3600 — regardless of the zone file's own `$TTL` directive. |
+| **Default TTL mismatch on add** | When using `--add-from` and a record in the YAML omits its `ttl`, the fallback is 3600 — regardless of the zone file's own `$TTL` directive.  This does not affect `--remove-from` because TTL is ignored during matching. |
 | **No serial overflow guard** | The SOA serial is incremented by 1 with no check for the 32-bit unsigned maximum (4 294 967 295). |
 
 ## Running the tests
