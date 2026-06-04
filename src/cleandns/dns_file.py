@@ -29,6 +29,7 @@ class ZoneChanges:
     zone file is processed.  Returned by DNSFile.save().
     """
     records_added: Tuple[AbstractRecord, ...]
+    records_removed: Tuple[AbstractRecord, ...]
     duplicates_removed: Tuple[AbstractRecord, ...]
     was_reordered: bool
     serial_before: Optional[int]
@@ -37,7 +38,7 @@ class ZoneChanges:
     @property
     def has_changes(self) -> bool:
         """True if any modifications were detected during processing."""
-        return bool(self.records_added or self.duplicates_removed or self.was_reordered)
+        return bool(self.records_added or self.records_removed or self.duplicates_removed or self.was_reordered)
 
 
 class DNSFile:
@@ -62,8 +63,9 @@ class DNSFile:
         self.origin = None
         self.__set_DNS_records()
         self.modified = False
-        # Change-tracking: populated by add_record(), remove_duplicates(), sort()
+        # Change-tracking: populated by add_record(), remove_record(), remove_duplicates(), sort()
         self._records_added: List[AbstractRecord] = []
+        self._records_removed: List[AbstractRecord] = []
         self._duplicates_removed: List[AbstractRecord] = []
         self._was_reordered: bool = False
 
@@ -188,6 +190,21 @@ class DNSFile:
         self.records[record.type].append(record)
         self._records_added.append(record)
         self.modified = True
+
+    def remove_record(self, record: AbstractRecord) -> bool:
+        """
+        Remove the first record in this zone that matches *record* by type,
+        name (case-insensitive), and rdata.  TTL is not considered.
+
+        Returns True if a match was found and removed, False otherwise.
+        """
+        records_of_type = self.records[record.type]
+        for i, existing in enumerate(records_of_type):
+            if existing.name.lower() == record.name.lower() and existing.rdata == record.rdata:
+                self._records_removed.append(records_of_type.pop(i))
+                self.modified = True
+                return True
+        return False
 
     def remove_duplicates(self):
         """
@@ -334,6 +351,7 @@ class DNSFile:
 
         return ZoneChanges(
             records_added=tuple(self._records_added),
+            records_removed=tuple(self._records_removed),
             duplicates_removed=tuple(self._duplicates_removed),
             was_reordered=self._was_reordered,
             serial_before=serial_before,

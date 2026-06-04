@@ -11,6 +11,7 @@ class ParsedArgs:
     config: DNSConfig
     files: List[str]
     add_from: Optional[Path]
+    remove_from: Optional[Path]
 
 
 class ArgumentParser:
@@ -31,6 +32,12 @@ class ArgumentParser:
             metavar="YAML",
             type=str,
             help="YAML file listing records to add. Zone files are discovered via named-checkconf -p."
+        )
+        _ = mode_group.add_argument(
+            "--remove-from",
+            metavar="YAML",
+            type=str,
+            help="YAML file listing records to remove. Zone files are discovered via named-checkconf -p."
         )
 
         _ = self.parser.add_argument(
@@ -113,9 +120,11 @@ class ArgumentParser:
         )
 
         add_from = Path(parsed_args.add_from) if parsed_args.add_from else None
+        remove_from = Path(parsed_args.remove_from) if parsed_args.remove_from else None
 
         return ParsedArgs(
             config=config,
             files=parsed_args.files or [],
             add_from=add_from,
+            remove_from=remove_from,
         )

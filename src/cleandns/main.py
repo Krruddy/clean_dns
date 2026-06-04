@@ -52,6 +52,9 @@ def _log_changes(changes: ZoneChanges, logger: Logger, label: str, dry_run: bool
     if changes.records_added:
         record_strs = ", ".join(f"{r.name} ({r.type.value})" for r in changes.records_added)
         parts.append(f"added {len(changes.records_added)} record(s): {record_strs}")
+    if changes.records_removed:
+        record_strs = ", ".join(f"{r.name} ({r.type.value})" for r in changes.records_removed)
+        parts.append(f"removed {len(changes.records_removed)} record(s): {record_strs}")
     if changes.duplicates_removed:
         parts.append(f"removed {len(changes.duplicates_removed)} duplicate(s)")
     if changes.was_reordered:
@@ -166,6 +169,73 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
     return 0
 
 
+def remove_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
+    """
+    Remove records listed in a YAML file from the appropriate zone files
+    discovered via named-checkconf -p. Returns 0 on success, 1 on failure.
+    Records not found in the zone are warned about but do not cause failure.
+    """
+    try:
+        zone_map = NamedConfParser.from_system()
+    except NamedConfError as e:
+        logger.error(f"Could not read BIND9 configuration: {e}")
+        return 1
+
+    try:
+        records_by_zone = YAMLRecordLoader.load(yaml_path, zone_map=zone_map)
+    except InvalidYAMLError as e:
+        logger.error(f"Could not load YAML file: {e}")
+        return 1
+
+    # Validate all zones are known before touching any file.
+    unknown = [z for z in records_by_zone if z not in zone_map]
+    if unknown:
+        logger.error(
+            f"The following zones were not found in named-checkconf output: "
+            f"{', '.join(unknown)}"
+        )
+        return 1
+
+    failed_zones: List[str] = []
+
+    for zone_name, records in records_by_zone.items():
+        file_path = zone_map[zone_name]
+        try:
+            dns_file = DNSFile(file_path, config, origin=zone_name)
+            for record in records:
+                if not dns_file.remove_record(record):
+                    logger.warning(
+                        f"{file_path.name} ({zone_name}): record not found — "
+                        f"{record.name} {record.type.value} {record.rdata}"
+                    )
+            dns_file.sort()
+            changes = dns_file.save()
+            _log_changes(changes, logger, f"{file_path.name} ({zone_name})", config.dry_run)
+            if changes.has_changes and not config.dry_run:
+                logger.info(f"Successfully updated {file_path.name} ({zone_name})")
+                if config.reload:
+                    if not _rndc_reload(zone_name, logger):
+                        failed_zones.append(zone_name)
+        except FileNotFoundError as e:
+            logger.error(f"File not found: '{file_path}'\n{e}")
+            failed_zones.append(zone_name)
+        except PermissionError as e:
+            logger.error(f"Permission denied: '{file_path}'\n{e}")
+            failed_zones.append(zone_name)
+        except OSError as e:
+            logger.error(f"OS error while processing '{file_path}'\n{e}")
+            failed_zones.append(zone_name)
+        except InvalidZoneFileError as e:
+            logger.error(f"Invalid zone file '{file_path}': {e}")
+            failed_zones.append(zone_name)
+
+    if failed_zones:
+        logger.error(f"Failed to update: {', '.join(failed_zones)}")
+        return 1
+
+    return 0
+
+
 def main():
     # Initialize the singleton logger (configuration is handled inside the class)
     logger = Logger()
@@ -175,6 +245,9 @@ def main():
 
     if parsed.add_from is not None:
         return add_from_yaml(parsed.add_from, logger, parsed.config)
+
+    if parsed.remove_from is not None:
+        return remove_from_yaml(parsed.remove_from, logger, parsed.config)
 
     if not parsed.files:
         logger.warning("No files provided to process. Use --help for more information.")

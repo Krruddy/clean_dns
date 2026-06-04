@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch, call
 from cleandns.argument_parser import ParsedArgs
 from cleandns.config import DNSConfig
-from cleandns.main import process_file, add_from_yaml
+from cleandns.main import process_file, add_from_yaml, remove_from_yaml
 from cleandns.exceptions import InvalidZoneFileError, EmptyZoneFileError, MissingNSRecordError
 from cleandns.logger import Logger
 
@@ -21,12 +21,13 @@ def config():
     return DNSConfig()
 
 
-def _parsed_args(config=None, files=None, add_from=None):
+def _parsed_args(config=None, files=None, add_from=None, remove_from=None):
     """Build a ParsedArgs for use in main() tests."""
     return ParsedArgs(
         config=config or DNSConfig(),
         files=files or [],
         add_from=add_from,
+        remove_from=remove_from,
     )
 
 
@@ -378,3 +379,131 @@ def test_add_from_yaml_reload_failure_returns_1(
         result = add_from_yaml(yaml_file, logger, reload_config)
 
     assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# remove_from_yaml — return codes and behaviour
+# ---------------------------------------------------------------------------
+
+def test_remove_from_yaml_returns_0_when_record_removed(tmp_path, forward_sample_zone_content, config, logger):
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: www\n"
+        "    ttl: 3600\n"
+        "    rdata: 192.168.1.10\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}):
+        assert remove_from_yaml(yaml_file, logger, config) == 0
+
+    updated = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+    assert "192.168.1.10" not in updated
+
+
+def test_remove_from_yaml_returns_0_when_record_not_found(tmp_path, forward_sample_zone_content, config, logger):
+    """Removing a non-existent record warns but does not fail."""
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: ghost\n"
+        "    ttl: 3600\n"
+        "    rdata: 10.0.0.1\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}):
+        assert remove_from_yaml(yaml_file, logger, config) == 0
+
+
+def test_remove_from_yaml_returns_1_when_named_checkconf_fails(tmp_path, config, logger):
+    from cleandns.exceptions import NamedConfNotFoundError
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.write_text("example.com: []\n", encoding=ZONE_FILE_ENCODING)
+
+    with patch("cleandns.main.NamedConfParser.from_system", side_effect=NamedConfNotFoundError("not found")):
+        assert remove_from_yaml(yaml_file, logger, config) == 1
+
+
+def test_remove_from_yaml_returns_1_for_unknown_zone(tmp_path, config, logger):
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.write_text(
+        "unknown.zone:\n"
+        "  - type: A\n"
+        "    name: host\n"
+        "    ttl: 3600\n"
+        "    rdata: 1.2.3.4\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={}):
+        assert remove_from_yaml(yaml_file, logger, config) == 1
+
+
+def test_remove_from_yaml_dry_run_does_not_modify_zone_file(tmp_path, forward_sample_zone_content, logger):
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+    original = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: www\n"
+        "    ttl: 3600\n"
+        "    rdata: 192.168.1.10\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+    dry_config = DNSConfig(dry_run=True)
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}):
+        assert remove_from_yaml(yaml_file, logger, dry_config) == 0
+
+    assert zone_file.read_text(encoding=ZONE_FILE_ENCODING) == original
+
+
+def test_remove_from_yaml_reload_calls_rndc_after_write(tmp_path, forward_sample_zone_content, logger):
+    zone_file = tmp_path / "example.com.zone"
+    zone_file.write_text(forward_sample_zone_content, encoding=ZONE_FILE_ENCODING)
+
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.write_text(
+        "example.com:\n"
+        "  - type: A\n"
+        "    name: www\n"
+        "    ttl: 3600\n"
+        "    rdata: 192.168.1.10\n",
+        encoding=ZONE_FILE_ENCODING,
+    )
+    reload_config = DNSConfig(reload=True)
+
+    with patch("cleandns.main.NamedConfParser.from_system", return_value={"example.com": zone_file}), \
+         patch("cleandns.main.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        result = remove_from_yaml(yaml_file, logger, reload_config)
+
+    assert result == 0
+    mock_run.assert_called_once()
+    cmd = mock_run.call_args[0][0]
+    assert cmd == ["rndc", "reload", "example.com"]
+
+
+def test_main_routes_to_remove_from_yaml(tmp_path):
+    yaml_file = tmp_path / "remove.yaml"
+    yaml_file.touch()
+
+    with patch("cleandns.main.ArgumentParser") as mock_cls, \
+         patch("cleandns.main.remove_from_yaml", return_value=0) as mock_remove:
+        mock_cls.return_value.parse_arguments.return_value = _parsed_args(remove_from=yaml_file)
+        from cleandns.main import main
+        assert main() == 0
+        mock_remove.assert_called_once()

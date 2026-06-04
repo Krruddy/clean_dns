@@ -682,3 +682,77 @@ def test_no_origin_file_without_explicit_origin_raises(tmp_path, no_origin_zone_
     zone_file.write_text(no_origin_zone_content, encoding=ZONE_FILE_ENCODING)
     with pytest.raises(InvalidZoneFileError):
         DNSFile(zone_file, DNSConfig())
+
+
+# ---------------------------------------------------------------------------
+# remove_record
+# ---------------------------------------------------------------------------
+
+def test_remove_record_returns_true_when_found(zone_file, default_config):
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    target = ARecord(name=existing.name, ttl=0, class_=DNSClass.IN, type=RecordType.A, rdata=existing.rdata, omit_ttl=False)
+
+    assert dns.remove_record(target) is True
+    assert all(r.rdata != existing.rdata or r.name.lower() != existing.name.lower() for r in dns.records[RecordType.A])
+
+
+def test_remove_record_returns_false_when_not_found(zone_file, default_config):
+    dns = DNSFile(zone_file, default_config)
+    ghost = ARecord(name="ghost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.1", omit_ttl=False)
+
+    assert dns.remove_record(ghost) is False
+
+
+def test_remove_record_sets_modified(zone_file, default_config):
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    target = ARecord(name=existing.name, ttl=0, class_=DNSClass.IN, type=RecordType.A, rdata=existing.rdata, omit_ttl=False)
+
+    dns.remove_record(target)
+
+    assert dns.modified is True
+
+
+def test_remove_record_does_not_set_modified_when_not_found(zone_file, default_config):
+    dns = DNSFile(zone_file, default_config)
+    ghost = ARecord(name="ghost", ttl=3600, class_=DNSClass.IN, type=RecordType.A, rdata="10.0.0.1", omit_ttl=False)
+
+    dns.remove_record(ghost)
+
+    assert dns.modified is False
+
+
+def test_remove_record_name_match_is_case_insensitive(zone_file, default_config):
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    target = ARecord(name=existing.name.upper(), ttl=0, class_=DNSClass.IN, type=RecordType.A, rdata=existing.rdata, omit_ttl=False)
+
+    assert dns.remove_record(target) is True
+
+
+def test_zone_changes_records_removed(zone_file, default_config):
+    """ZoneChanges.records_removed must contain every record removed via remove_record()."""
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    target = ARecord(name=existing.name, ttl=0, class_=DNSClass.IN, type=RecordType.A, rdata=existing.rdata, omit_ttl=False)
+
+    dns.remove_record(target)
+    changes = dns.save()
+
+    assert changes.has_changes is True
+    assert len(changes.records_removed) == 1
+    assert changes.records_removed[0].rdata == existing.rdata
+
+
+def test_remove_record_written_to_output(zone_file, default_config):
+    """After remove_record + save, the removed record must not appear in the rewritten file."""
+    dns = DNSFile(zone_file, default_config)
+    existing = dns.records[RecordType.A][0]
+    target = ARecord(name=existing.name, ttl=0, class_=DNSClass.IN, type=RecordType.A, rdata=existing.rdata, omit_ttl=False)
+
+    dns.remove_record(target)
+    dns.save()
+
+    updated = zone_file.read_text(encoding=ZONE_FILE_ENCODING)
+    assert existing.rdata not in updated
