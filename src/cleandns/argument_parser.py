@@ -103,6 +103,17 @@ class ArgumentParser:
             help="Disable backup creation. Use when backups are managed externally.",
         )
 
+        _ = self.parser.add_argument(
+            "--dedup-ip",
+            action="store_true",
+            default=False,
+            help=(
+                "Interactively resolve records that share the same IP address "
+                "(A and AAAA types). For each group you will be prompted to choose "
+                "which record(s) to keep. Has no effect in non-interactive environments."
+            ),
+        )
+
     def parse_arguments(self, args: Optional[Sequence[str]] = None) -> ParsedArgs:
         parsed_args = self.parser.parse_args(args)
 
@@ -117,6 +128,7 @@ class ArgumentParser:
             reload=parsed_args.reload,
             backup_dir=backup_dir,
             no_backup=parsed_args.no_backup,
+            dedup_ip=parsed_args.dedup_ip,
         )
 
         add_from = Path(parsed_args.add_from) if parsed_args.add_from else None

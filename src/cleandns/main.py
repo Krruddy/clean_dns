@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from cleandns.argument_parser import ArgumentParser
 from cleandns.config import DNSConfig
+from cleandns.deduplication import find_ip_duplicates, prompt_deduplication
 from cleandns.dns_file import DNSFile, ZoneChanges
 from cleandns.logger import Logger
 from cleandns.named_conf_parser import NamedConfParser
@@ -38,6 +39,16 @@ def _rndc_reload(zone_name: Optional[str], logger: Logger) -> bool:
     except OSError as e:
         logger.error(f"Could not run rndc: {e}")
         return False
+
+
+def _apply_dedup_ip(dns_file: DNSFile, config: DNSConfig, logger: Logger) -> None:
+    """Remove IP-duplicate records selected by the user when --dedup-ip is active."""
+    if not config.dedup_ip:
+        return
+    groups = find_ip_duplicates(dns_file.records)
+    records_to_remove = prompt_deduplication(groups, logger)
+    for record in records_to_remove:
+        dns_file.remove_record(record)
 
 
 def _log_changes(changes: ZoneChanges, logger: Logger, label: str, dry_run: bool) -> None:
@@ -76,6 +87,7 @@ def process_file(file_path: Path, logger: Logger, config: DNSConfig, origin: Opt
     try:
         dns_file = DNSFile(file_path, config, origin=origin)
         dns_file.remove_duplicates()
+        _apply_dedup_ip(dns_file, config, logger)
         dns_file.sort()
         changes = dns_file.save()
         _log_changes(changes, logger, file_path.name, config.dry_run)
@@ -141,6 +153,7 @@ def add_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
             for record in records:
                 dns_file.add_record(record)
             dns_file.remove_duplicates()
+            _apply_dedup_ip(dns_file, config, logger)
             dns_file.sort()
             changes = dns_file.save()
             _log_changes(changes, logger, f"{file_path.name} ({zone_name})", config.dry_run)
@@ -208,6 +221,7 @@ def remove_from_yaml(yaml_path: Path, logger: Logger, config: DNSConfig) -> int:
                         f"{file_path.name} ({zone_name}): record not found — "
                         f"{record.name} {record.type.value} {record.rdata}"
                     )
+            _apply_dedup_ip(dns_file, config, logger)
             dns_file.sort()
             changes = dns_file.save()
             _log_changes(changes, logger, f"{file_path.name} ({zone_name})", config.dry_run)

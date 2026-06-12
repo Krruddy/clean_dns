@@ -17,3 +17,4 @@ class DNSConfig:
     # no_backup:  skip backup creation entirely (for external backup workflows).
     backup_dir: Optional[Path] = None
     no_backup: bool = False
+    dedup_ip: bool = False

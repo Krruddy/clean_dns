@@ -45,6 +45,7 @@ def test_unknown_arguments():
     (["--omit-record-ttl"], "omit_record_ttl"),
     (["--dry-run"],         "dry_run"),
     (["--reload"],          "reload"),
+    (["--dedup-ip"],        "dedup_ip"),
 ])
 def test_config_flag_sets_attribute(flag, attr):
     """Each config flag must set its corresponding DNSConfig attribute to True."""
@@ -62,6 +63,7 @@ def test_config_flags_default_to_false():
     assert result.config.dry_run is False
     assert result.config.reload is False
     assert result.config.no_backup is False
+    assert result.config.dedup_ip is False
 
 
 def test_backup_dir_defaults_to_none():

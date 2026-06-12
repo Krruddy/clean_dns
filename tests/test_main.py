@@ -507,3 +507,118 @@ def test_main_routes_to_remove_from_yaml(tmp_path):
         from cleandns.main import main
         assert main() == 0
         mock_remove.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# --dedup-ip — integration via process_file
+# ---------------------------------------------------------------------------
+
+DEDUP_ZONE_CONTENT = (
+    "$TTL 3600\n"
+    "$ORIGIN example.com.\n"
+    "@   IN  SOA ns1.example.com. admin.example.com. (\n"
+    "        2023101001 ; serial\n"
+    "        3600       ; refresh\n"
+    "        1800       ; retry\n"
+    "        604800     ; expire\n"
+    "        86400 )    ; minimum\n"
+    "@   IN  NS  ns1.example.com.\n"
+    "@   IN  NS  ns2.example.com.\n"
+    "host1   IN  A   192.168.1.10\n"
+    "host2   IN  A   192.168.1.10\n"
+    "host3   IN  A   192.168.1.20\n"
+)
+
+
+def test_process_file_dedup_ip_removes_user_selected_record(tmp_path, logger):
+    """With dedup_ip=True in a TTY, the record the user discards is removed from the zone."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(DEDUP_ZONE_CONTENT, encoding="utf-8")
+    config = DNSConfig(dedup_ip=True, no_backup=True)
+
+    # TTY: user keeps index 0 (host1), so host2 (index 1) should be removed.
+    with patch("sys.stdout") as mock_stdout, \
+         patch("builtins.input", return_value="0"), \
+         patch("builtins.print"):
+        mock_stdout.isatty.return_value = True
+        result = process_file(p, logger, config)
+
+    assert result == 0
+    content = p.read_text(encoding="utf-8")
+    assert "host1" in content
+    assert "host2" not in content
+    assert "host3" in content  # different IP, untouched
+
+
+def test_process_file_dedup_ip_non_tty_keeps_all_records(tmp_path, logger):
+    """With dedup_ip=True in a non-interactive environment, all records are preserved."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(DEDUP_ZONE_CONTENT, encoding="utf-8")
+    config = DNSConfig(dedup_ip=True, no_backup=True)
+
+    with patch("sys.stdout") as mock_stdout:
+        mock_stdout.isatty.return_value = False
+        result = process_file(p, logger, config)
+
+    assert result == 0
+    content = p.read_text(encoding="utf-8")
+    assert "host1" in content
+    assert "host2" in content
+
+
+def test_process_file_dedup_ip_false_skips_dedup(tmp_path, logger):
+    """Without --dedup-ip, IP duplicates are left untouched (handled by remove_duplicates only)."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(DEDUP_ZONE_CONTENT, encoding="utf-8")
+    config = DNSConfig(dedup_ip=False, no_backup=True)
+
+    with patch("builtins.input") as mock_input:
+        result = process_file(p, logger, config)
+
+    assert result == 0
+    mock_input.assert_not_called()
+
+
+def test_process_file_dedup_ip_enter_keeps_all(tmp_path, logger):
+    """With dedup_ip=True in a TTY, pressing Enter for a group keeps all records."""
+    p = tmp_path / "example.com.zone"
+    p.write_text(DEDUP_ZONE_CONTENT, encoding="utf-8")
+    config = DNSConfig(dedup_ip=True, no_backup=True)
+
+    with patch("sys.stdout") as mock_stdout, \
+         patch("builtins.input", return_value=""), \
+         patch("builtins.print"):
+        mock_stdout.isatty.return_value = True
+        result = process_file(p, logger, config)
+
+    assert result == 0
+    content = p.read_text(encoding="utf-8")
+    assert "host1" in content
+    assert "host2" in content
+
+
+def test_process_file_dedup_ip_zone_changes_reflect_removed_records(tmp_path, logger):
+    """Records removed via --dedup-ip must appear in ZoneChanges.records_removed."""
+    from cleandns.dns_file import DNSFile
+    from cleandns.deduplication import find_ip_duplicates, prompt_deduplication
+
+    p = tmp_path / "example.com.zone"
+    p.write_text(DEDUP_ZONE_CONTENT, encoding="utf-8")
+    config = DNSConfig(dedup_ip=True, no_backup=True)
+
+    dns_file = DNSFile(p, config)
+    dns_file.remove_duplicates()
+
+    with patch("sys.stdout") as mock_stdout, \
+         patch("builtins.input", return_value="0"), \
+         patch("builtins.print"):
+        mock_stdout.isatty.return_value = True
+        groups = find_ip_duplicates(dns_file.records)
+        to_remove = prompt_deduplication(groups, logger)
+        for record in to_remove:
+            dns_file.remove_record(record)
+
+    changes = dns_file.save()
+    assert changes.has_changes is True
+    assert len(changes.records_removed) == 1
+    assert changes.records_removed[0].name in ("host1", "host2")
