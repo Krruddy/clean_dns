@@ -19,18 +19,32 @@ Supported record types: **A, AAAA, CNAME, MX, NS, PTR, TXT**.
 
 ## Requirements
 
-- Python ≥ 3.8
-- [dnspython](https://www.dnspython.org/) ≥ 2.0 (< 2.6 for Python 3.8)
+- Python ≥ 3.14 (the version shipped as `python3` on Ubuntu 26.04)
+- [dnspython](https://www.dnspython.org/) ≥ 2.0
 - [PyYAML](https://pyyaml.org/) ≥ 6.0
 - BIND9 (`named-checkconf`) must be on PATH when using `--add-from` or `--remove-from`
 - BIND9 (`rndc`) must be on PATH when using `--reload`
 
+For Python 3.8 through 3.13, use the `python-3.8-compat` branch instead.
+
 ## Installation
+
+On Ubuntu, install the venv module first — it is not part of the base
+Python package:
+
+```bash
+sudo apt install python3.14-venv
+```
+
+A virtual environment is **required**, not merely recommended: Ubuntu marks
+its system Python as externally managed (PEP 668), so `pip install` outside
+a venv is refused.  Note also that Ubuntu ships no unversioned `python`
+binary; use `python3`.
 
 ### Standard installation (internet-connected)
 
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install --editable .
 ```
@@ -40,14 +54,14 @@ pip install --editable .
 The `vendor/` directory contains pre-downloaded wheel files for all Python dependencies, allowing installation without internet access.
 
 **Prerequisites:**
-- Python 3.8+ installed on the system
+- Python 3.14 installed on the system
 - The entire project directory (including `vendor/`) copied to the air-gapped system
 
 **Installation steps:**
 
 ```bash
 # Create a virtual environment
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install all dependencies from the vendor directory
@@ -56,22 +70,43 @@ pip install --no-index --find-links vendor -e .
 
 **Platform compatibility:**
 
-The vendored wheels are pre-downloaded for **Python 3.8 on Linux x86_64**. For other platforms or Python versions:
+The vendored wheels are pre-downloaded for **Python 3.14 on Linux x86_64**.
+Most are pure-Python and portable, but PyYAML ships a compiled extension and
+is therefore tied to both the interpreter ABI (`cp314`) and the platform.
+For other platforms or Python versions, regenerate the directory on an
+internet-connected system running the *target* Python version:
 
-1. On an internet-connected system with the target Python version:
-   ```bash
-   pip download --dest vendor --python-version 3.X --platform PLATFORM \
-     "dnspython>=2.0,<2.6" "PyYAML>=6.0"
-   ```
-2. Copy the updated `vendor/` directory to the air-gapped system
-3. Follow the installation steps above
+```bash
+pip download --dest vendor --only-binary=:all: \
+  "dnspython>=2.0" "PyYAML>=6.0" "pytest>=7.0" "pyright>=1.1" "pyinstaller>=6.16"
+```
+
+Then copy the updated `vendor/` directory to the air-gapped system and follow
+the installation steps above.  `requirements.lock` records the exact versions
+this directory was generated from.
 
 **Troubleshooting:**
 
-If you encounter wheel compatibility errors, ensure:
-- The Python version matches (the vendored wheels are for Python 3.8)
+`ERROR: Could not find a version that satisfies the requirement PyYAML (from
+versions: none)` means the vendored PyYAML wheel does not match the running
+interpreter — check that:
+- The Python version matches (the vendored wheels are for Python 3.14)
 - The platform matches (Linux x86_64)
 - All required `.whl` files are present in the `vendor/` directory
+
+## Building a standalone binary
+
+`clean-dns.spec` builds a single self-contained executable that needs no
+Python installation on the target host:
+
+```bash
+pip install --editable ".[build]"
+pyinstaller clean-dns.spec
+./dist/clean-dns --help
+```
+
+The binary embeds the interpreter it was built with, so build it on a host
+running the same Python version and architecture as the deployment target.
 
 ## Usage
 
@@ -217,5 +252,6 @@ dnsEntries:
 
 ```bash
 source venv/bin/activate
+pip install --editable ".[dev]"
 pytest
 ```
