@@ -1,0 +1,26 @@
+[project]
+name = "clean_dns"
+version = "0.1.0"
+description = "A command-line tool for managing BIND9 DNS zone files"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "dnspython>=2.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pyright>=1.1",
+]
+build = [
+    "pyinstaller>=6.16",
+]
+
+[project.scripts]
+cleandns = "cleandns.main:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
