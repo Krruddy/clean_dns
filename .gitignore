@@ -31,6 +31,8 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+# ...except the checked-in PyInstaller spec used to build the release binary.
+!clean-dns.spec
 
 # Installer logs
 pip-log.txt
