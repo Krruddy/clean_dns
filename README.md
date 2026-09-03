@@ -56,6 +56,7 @@ The `vendor/` directory contains pre-downloaded wheel files for all Python depen
 **Prerequisites:**
 - Python 3.14 installed on the system
 - The entire project directory (including `vendor/`) copied to the air-gapped system
+- The filesystem the project lives in doesn't have `noexec`
 
 **Installation steps:**
 
