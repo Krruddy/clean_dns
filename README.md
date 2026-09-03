@@ -68,31 +68,70 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install --no-index --find-links vendor -e .
 ```
 
-**Platform compatibility:**
+**Regenerating `vendor/`:**
 
-The vendored wheels are pre-downloaded for **Python 3.14 on Linux x86_64**.
-Most are pure-Python and portable, but PyYAML ships a compiled extension and
-is therefore tied to both the interpreter ABI (`cp314`) and the platform.
-For other platforms or Python versions, regenerate the directory on an
-internet-connected system running the *target* Python version:
+Three wheels are the irreducible minimum for the command above to work:
+
+| Wheel | Why it is needed |
+|---|---|
+| `dnspython` | runtime dependency |
+| `PyYAML` | runtime dependency |
+| `setuptools` | **build** dependency — `pip install -e .` builds the package in an isolated environment, which resolves `build-system.requires` from `vendor/` too |
+
+`setuptools` is easy to miss because nothing imports it at runtime. Omitting
+it fails the install before either runtime dependency is even considered
+(see Troubleshooting).
+
+Run this on an internet-connected machine; the full set including the test,
+type-check, and binary-build tooling is:
 
 ```bash
 pip download --dest vendor --only-binary=:all: \
-  "dnspython>=2.0" "PyYAML>=6.0" "pytest>=7.0" "pyright>=1.1" "pyinstaller>=6.16"
+  "dnspython>=2.0" "PyYAML>=6.0" "setuptools>=61" \
+  "pytest>=7.0" "pyright>=1.1" "pyinstaller>=6.16"
 ```
 
-Then copy the updated `vendor/` directory to the air-gapped system and follow
-the installation steps above.  `requirements.lock` records the exact versions
-this directory was generated from.
+Drop the second line's three arguments for a runtime-only deployment.
+`--only-binary=:all:` matters: without it pip may fetch a source archive that
+then needs a compiler on the offline machine.
+
+Copy the resulting directory to the air-gapped system and follow the
+installation steps above. `requirements.lock` records the exact versions the
+checked-in directory was generated from.
+
+**Platform compatibility:**
+
+The vendored wheels target **Python 3.14 on Linux x86_64**. Most are
+pure-Python and portable, but PyYAML ships a compiled extension and is
+therefore tied to both the interpreter ABI (`cp314`) and the platform — it
+alone determines whether `vendor/` is usable.
+
+The command above infers those tags from the machine it runs on, so prefer to
+run it on a host matching the target. When that is not possible, state the
+target explicitly:
+
+```bash
+pip download --dest vendor --only-binary=:all: \
+  --python-version 3.14 --platform manylinux2014_x86_64 --abi cp314 \
+  "dnspython>=2.0" "PyYAML>=6.0" "setuptools>=61"
+```
 
 **Troubleshooting:**
 
+`ERROR: Could not find a version that satisfies the requirement setuptools>=61`
+(reported under `installing build dependencies did not run successfully`) means
+`vendor/` has no `setuptools` wheel. Add one — see the table above.
+
 `ERROR: Could not find a version that satisfies the requirement PyYAML (from
 versions: none)` means the vendored PyYAML wheel does not match the running
-interpreter — check that:
-- The Python version matches (the vendored wheels are for Python 3.14)
+interpreter. Check that:
+- The Python version matches (the vendored wheels are for Python 3.14; the
+  wheel filename must read `cp314`)
 - The platform matches (Linux x86_64)
 - All required `.whl` files are present in the `vendor/` directory
+
+Note that `pyright` is not usable offline even when vendored: it downloads a
+Node runtime on first run. The test suite (`pytest`) has no such limitation.
 
 ## Building a standalone binary
 
